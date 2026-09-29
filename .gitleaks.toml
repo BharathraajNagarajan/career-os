@@ -1,0 +1,8 @@
+title = "Career OS secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholders only"
+paths = ['''\.env\.example$''']
