@@ -4,6 +4,7 @@ import { HomePlaceholder } from "../routes/HomePlaceholder";
 import { Lanes } from "../routes/Lanes";
 import { Profile } from "../routes/Profile";
 import { Resumes } from "../routes/Resumes";
+import { Review } from "../routes/Review";
 import { Settings } from "../routes/Settings";
 import { SignIn } from "../routes/SignIn";
 import { Layout } from "./Layout";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
           { path: "profile", element: <Profile /> },
           { path: "resumes", element: <Resumes /> },
           { path: "lanes", element: <Lanes /> },
+          { path: "review", element: <Review /> },
           { path: "settings", element: <Settings /> },
         ],
       },
