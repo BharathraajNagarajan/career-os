@@ -6,6 +6,7 @@ Create Date: 2026-10-02
 """
 
 from collections.abc import Sequence
+from typing import Any
 
 import sqlalchemy as sa
 from alembic import op
@@ -19,7 +20,7 @@ depends_on: str | Sequence[str] | None = None
 APP_ROLE = "career_os_app"
 
 
-def created_at() -> sa.Column[sa.DateTime]:
+def created_at() -> sa.Column[Any]:
     return sa.Column(
         "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
     )
@@ -33,9 +34,7 @@ def upgrade() -> None:
         sa.Column("headline", sa.Text(), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
         sa.Column("current_location", sa.Text(), nullable=True),
-        sa.Column(
-            "relocation_preference", sa.Text(), server_default="unspecified", nullable=False
-        ),
+        sa.Column("relocation_preference", sa.Text(), server_default="unspecified", nullable=False),
         sa.Column("remote_preference", sa.Text(), server_default="no_preference", nullable=False),
         sa.Column("work_authorization", postgresql.JSONB(), nullable=False),
         sa.Column(
@@ -48,7 +47,10 @@ def upgrade() -> None:
         sa.Column("communication_preferences", postgresql.JSONB(), nullable=False),
         created_at(),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint(
             "relocation_preference IN ('open', 'not_open', 'unspecified')",
@@ -117,7 +119,10 @@ def upgrade() -> None:
         sa.Column("status", sa.Text(), server_default="active", nullable=False),
         created_at(),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint("status IN ('active', 'archived')", name=op.f("ck_resume_lanes_status")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_resume_lanes")),
@@ -187,7 +192,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        op.f("fk_resume_lanes_user_id_default_resume_id_resumes"), "resume_lanes", type_="foreignkey"
+        op.f("fk_resume_lanes_user_id_default_resume_id_resumes"),
+        "resume_lanes",
+        type_="foreignkey",
     )
     op.drop_table("resumes")
     op.drop_table("resume_lanes")

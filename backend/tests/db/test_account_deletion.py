@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.artifacts.storage import FilesystemStorage
 from app.auth.deletion import DeleteAccountPayload, DeletionHooks, make_delete_account_handler
 from app.config import Settings
 from app.jobs.handlers import register_job_handlers
@@ -39,7 +40,9 @@ def worker(
     app_sessions: sessionmaker[Session], settings: Settings, hooks: DeletionHooks
 ) -> JobRunner:
     registry = JobRegistry()
-    register_job_handlers(registry, hooks)
+    register_job_handlers(
+        registry, hooks, storage=FilesystemStorage(settings.artifact_storage_dir), settings=settings
+    )
     return JobRunner(app_sessions, registry, settings, worker_id="deletion-test")
 
 
