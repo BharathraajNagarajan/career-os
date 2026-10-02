@@ -2,11 +2,15 @@ import os
 import signal
 import socket
 import threading
+from collections.abc import Callable
 from types import FrameType
 
 from app import __version__
 from app.config import Settings, get_settings
+from app.core.db import create_db_engine, session_factory
 from app.core.logging import configure_logging, get_logger
+from app.jobs.registry import job_registry
+from app.jobs.runner import JobRunner
 
 log = get_logger(__name__)
 
@@ -15,8 +19,14 @@ def worker_identity() -> str:
     return f"{socket.gethostname()}-{os.getpid()}"
 
 
-def run(settings: Settings, stop: threading.Event, max_iterations: int | None = None) -> int:
-    worker_id = worker_identity()
+def run(
+    settings: Settings,
+    stop: threading.Event,
+    step: Callable[[], bool],
+    max_iterations: int | None = None,
+    worker_id: str | None = None,
+) -> int:
+    worker_id = worker_id or worker_identity()
     log.info(
         "worker_started",
         worker_id=worker_id,
@@ -28,8 +38,14 @@ def run(settings: Settings, stop: threading.Event, max_iterations: int | None = 
         if max_iterations is not None and iterations >= max_iterations:
             break
         iterations += 1
-        log.debug("worker_idle", worker_id=worker_id, iteration=iterations)
-        stop.wait(settings.worker_poll_interval_seconds)
+        try:
+            busy = step()
+        except Exception as exc:
+            log.error("worker_step_failed", worker_id=worker_id, error_type=type(exc).__name__)
+            busy = False
+        if not busy:
+            log.debug("worker_idle", worker_id=worker_id, iteration=iterations)
+            stop.wait(settings.worker_poll_interval_seconds)
     log.info("worker_stopped", worker_id=worker_id, count=iterations)
     return iterations
 
@@ -48,7 +64,13 @@ def main() -> None:
     configure_logging(settings)
     stop = threading.Event()
     install_signal_handlers(stop)
-    run(settings, stop)
+    worker_id = worker_identity()
+    engine = create_db_engine(settings.database_url)
+    runner = JobRunner(session_factory(engine), job_registry, settings, worker_id)
+    try:
+        run(settings, stop, runner.run_once, worker_id=worker_id)
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":
