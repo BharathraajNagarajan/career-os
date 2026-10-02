@@ -9,6 +9,7 @@ from app.auth.service import AuthContext
 from app.config import Settings
 from app.core.errors import ErrorResponse
 from app.llm.gateway import utc_now
+from app.llm.pricing import MICRO
 from app.llm.repository import LlmRunRepository, next_budget_reset
 from app.llm.schemas import BudgetResponse
 
@@ -33,7 +34,7 @@ def get_budget(
     auth: Auth, session: DbSession, settings: Annotated[Settings, Depends(get_settings_from_app)]
 ) -> BudgetResponse:
     now = utc_now()
-    spent = LlmRunRepository(session).spent_in_day(user_id=auth.user_id, now=now)
+    spent = LlmRunRepository(session).spent_in_day(user_id=auth.user_id, now=now).quantize(MICRO)
     cap = settings.llm_daily_cost_cap_usd
     return BudgetResponse(
         spent_usd=spent,

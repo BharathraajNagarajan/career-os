@@ -488,14 +488,26 @@ def test_two_simultaneous_reservations_that_cannot_both_fit_yield_one_success(
     app_sessions: sessionmaker[Session], session: Session, user_id: uuid.UUID
 ) -> None:
     barrier = threading.Barrier(2)
-    gateway, provider = make_gateway(
-        app_sessions,
-        cap="0.002",
-        script=[VALID, VALID],
-        clock=synchronized_clock(barrier),
+    refused = threading.Event()
+
+    class HoldsUntilTheOtherIsRefused(FakeProvider):
+        def complete(self, request: ProviderRequest) -> ProviderResult:
+            refused.wait(timeout=10)
+            return super().complete(request)
+
+    provider = HoldsUntilTheOtherIsRefused([VALID, VALID])
+    gateway, _ = make_gateway(
+        app_sessions, cap="0.002", provider=provider, clock=synchronized_clock(barrier)
     )
 
-    outcomes = run_two([lambda: structured(gateway, user_id), lambda: structured(gateway, user_id)])
+    def attempt() -> None:
+        try:
+            structured(gateway, user_id)
+        except LlmBudgetExhausted:
+            refused.set()
+            raise
+
+    outcomes = run_two([attempt, attempt])
 
     failures = [outcome for outcome in outcomes if outcome is not None]
     assert len(failures) == 1
