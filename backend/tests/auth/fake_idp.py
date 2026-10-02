@@ -27,6 +27,9 @@ class FakeIdentityProvider:
 
     def __init__(self) -> None:
         self.key = RSAKey.generate_key(2048, {"kid": "test-key", "use": "sig"})
+        self.published = [self.key]
+        self.cached = [self.key]
+        self.refresh_count = 0
         self.pending: dict[str, PendingAuthorization] = {}
         self.codes: dict[str, str] = {}
 
@@ -54,11 +57,20 @@ class FakeIdentityProvider:
             raise OidcError("token_exchange_failed")
         return id_token
 
-    def jwks(self) -> dict[str, Any]:
-        return {"keys": [self.key.as_dict(private=False)]}
+    def jwks(self, *, refresh: bool = False) -> dict[str, Any]:
+        if refresh:
+            self.refresh_count += 1
+            self.cached = list(self.published)
+        return {"keys": [key.as_dict(private=False) for key in self.cached]}
+
+    def rotate_key(self) -> RSAKey:
+        new_key = RSAKey.generate_key(2048, {"kid": f"rotated-{len(self.published)}", "use": "sig"})
+        self.published = [new_key]
+        return new_key
 
     def sign(self, claims: dict[str, Any], key: RSAKey | None = None) -> str:
-        return jwt.encode({"alg": "RS256", "kid": "test-key"}, claims, key or self.key)
+        signing_key = key or self.key
+        return jwt.encode({"alg": "RS256", "kid": signing_key.kid}, claims, signing_key)
 
     def claims(
         self,

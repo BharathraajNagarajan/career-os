@@ -1,4 +1,6 @@
+import base64
 import hmac
+import json
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -28,7 +30,7 @@ class IdentityProvider(Protocol):
 
     def exchange_code(self, *, code: str, code_verifier: str) -> str: ...
 
-    def jwks(self) -> dict[str, Any]: ...
+    def jwks(self, *, refresh: bool = False) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -59,13 +61,31 @@ def build_authorization_url(
     return str(url)
 
 
+def _token_kid(id_token: str) -> str | None:
+    try:
+        segment = id_token.split(".", 1)[0]
+        header = json.loads(base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4)))
+    except ValueError as exc:
+        raise OidcError("invalid_id_token") from exc
+    kid = header.get("kid") if isinstance(header, dict) else None
+    return kid if isinstance(kid, str) else None
+
+
+def _signing_keys(id_token: str, provider: IdentityProvider) -> dict[str, Any]:
+    keys = provider.jwks()
+    kid = _token_kid(id_token)
+    if kid is not None and kid not in {key.get("kid") for key in keys.get("keys", [])}:
+        keys = provider.jwks(refresh=True)
+    return keys
+
+
 def verify_id_token(
     id_token: str, *, provider: IdentityProvider, nonce: str, now: int | None = None
 ) -> VerifiedIdentity:
     try:
         token = jwt.decode(
             id_token,
-            KeySet.import_key_set(cast(KeySetSerialization, provider.jwks())),
+            KeySet.import_key_set(cast(KeySetSerialization, _signing_keys(id_token, provider))),
             algorithms=["RS256"],
         )
         claims = token.claims

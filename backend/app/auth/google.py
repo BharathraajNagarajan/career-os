@@ -66,7 +66,9 @@ class GoogleIdentityProvider:
             raise OidcError("token_exchange_failed")
         return id_token
 
-    def jwks(self) -> dict[str, Any]:
+    def jwks(self, *, refresh: bool = False) -> dict[str, Any]:
+        if refresh:
+            self._cache.pop("jwks", None)
         return self._cached("jwks", lambda: self._get(str(self._discovery()["jwks_uri"])))
 
     def _discovery(self) -> dict[str, Any]:

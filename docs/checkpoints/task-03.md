@@ -16,9 +16,13 @@ Branch `task-03-auth`. Brief: [docs/briefs/task-03.md](../briefs/task-03.md). De
 
 Also delivered: migration 0002 (`auth_identities`, `sessions`, grants, function, working downgrade); OpenAPI export (`backend/openapi.json`) and generated frontend types; frontend sign-in page, route guard, settings page and a fetch wrapper that adds the CSRF header and maps 401 to the sign-in page; Compose passes OAuth and session settings to the API only; the `REQUIRE_DB_TESTS` CI guard.
 
+## Post-review fix: JWKS key rotation
+
+Closed a gap found in review (it was listed under Unresolved issues). `verify_id_token` now reads the token's `kid`; if it is not in the cached JWKS it refetches the JWKS once, bypassing the 15-minute cache (`IdentityProvider.jwks(refresh=True)`), and retries verification. The refetch happens at most once per verification and the normal cache is unchanged otherwise. Tests: key rotation with sign-in succeeding end to end (fresh fake IdP, cached JWKS holds the old key, token signed with the new `kid`), an unknown `kid` still missing after the refetch is rejected with exactly one refetch, a known `kid` causes no refetch, and the Google provider's cache is bypassed only on `refresh=True` (mock HTTP transport). Files: `app/auth/oidc.py`, `app/auth/google.py`, `tests/auth/fake_idp.py`, `tests/auth/test_oidc.py`, `tests/auth/test_google_provider.py`, `tests/db/test_auth_flow.py`, `docs/architecture/auth.md`. Local re-run: ruff and mypy clean, 182 tests passed (was 176), 0 failed, 0 skipped; frontend unchanged.
+
 ## Evidence
 
-**Local checks on the final code (commit f07bc9f):** ruff check and format clean; mypy strict, 70 files, no issues; 176 backend tests passed, 0 failed, 0 skipped, with `REQUIRE_DB_TESTS=1` and Postgres; frontend lint, typecheck, 16 tests and build pass; regenerating `openapi.json` and `schema.d.ts` produced no diff.
+**Local checks (commit f07bc9f, backend re-run after the JWKS fix):** ruff check and format clean; mypy strict, 70 files, no issues; 182 backend tests passed (176 before the JWKS fix), 0 failed, 0 skipped, with `REQUIRE_DB_TESTS=1` and Postgres; frontend lint, typecheck, 16 tests and build pass; regenerating `openapi.json` and `schema.d.ts` produced no diff.
 
 **Migrations (empty scratch DB):** bootstrap, `upgrade head`, `alembic check` ("No new upgrade operations detected"), `downgrade base`, `upgrade head` all exited 0. The scratch DB was dropped afterwards.
 
@@ -81,7 +85,7 @@ Also delivered: migration 0002 (`auth_identities`, `sessions`, grants, function,
 | --- | --- |
 | `ruff check`, `ruff format --check` | Pass (70 files formatted) |
 | `mypy` (strict) | Pass, 70 files |
-| `pytest` with Postgres, `REQUIRE_DB_TESTS=1` | 176 passed, 0 failed, 0 skipped (includes Task 2's tests) |
+| `pytest` with Postgres, `REQUIRE_DB_TESTS=1` | 182 passed, 0 failed, 0 skipped (includes Task 2's tests; 176 before the JWKS fix) |
 | `REQUIRE_DB_TESTS=1` without `TEST_ADMIN_DATABASE_URL` | Fails with a usage error instead of skipping |
 | Migrations: upgrade, `alembic check`, downgrade, upgrade | Pass |
 | Frontend lint, typecheck, test (16), build | Pass |
@@ -98,7 +102,6 @@ None identified. The spec and brief did not conflict anywhere I found. One imple
 ## Unresolved issues
 
 - **`/me` latency, NFR-04 not fully confirmed.** Server-side `/me` is fast (p50 7 ms, p95 10 ms warm). Client-side p95 through `localhost` was 292 ms, with an environmental floor of about 219 ms (the `localhost` IPv6 then IPv4 fallback on this Windows and Docker host, shown by `/healthz` costing the same and `127.0.0.1` costing about 10 ms). The 441 to 482 ms server-side values seen in the API log for browser requests were not reproduced: a cold connection costs about 150 ms and the `last_seen_at` write about 5 ms. They are probably browser traffic through the Vite proxy after idle gaps (the proxy path showed p95 411 ms, max 537 ms), but I did not isolate it. Re-measure on a host without the `localhost` fallback, or in a deployed environment, before treating NFR-04 as confirmed.
-- JWKS is cached for 15 minutes with no forced refresh on an unknown `kid`; after a Google key rotation, sign-ins could fail for up to 15 minutes.
 - A deletion job for a user who is not `deletion_requested` raises and is retried up to the job's attempt limit before failing; it is harmless but not fail-fast.
 - The account-deletion flow was verified only with synthetic users and the real worker path in tests, not through the browser against a live account, as agreed.
 - The deletion hook registry is empty; Task 4 must register artifact and object deletion so "all objects" is true once objects exist.

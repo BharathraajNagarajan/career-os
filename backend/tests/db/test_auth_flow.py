@@ -6,9 +6,11 @@ import httpx2
 import pytest
 from fastapi import FastAPI
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.preauth import PREAUTH_COOKIE
+from app.config import AuthSettings, Settings, get_auth_settings
+from app.main import create_app
 from tests.auth.fake_idp import FakeIdentityProvider
 from tests.db.auth_helpers import new_client, sign_in, start_sign_in
 
@@ -230,4 +232,22 @@ def test_deletion_requested_user_cannot_sign_in(
     response = sign_in(new_client(app), idp, subject="sub-a", email=EMAIL)
 
     assert response.headers["location"] == "http://localhost:5173/sign-in?error=account_unavailable"
+    assert count(owner_session, "sessions") == 1
+
+
+def test_sign_in_succeeds_after_the_provider_rotates_its_signing_key(
+    db_settings: Settings,
+    app_sessions: sessionmaker[Session],
+    auth_settings: AuthSettings,
+    owner_session: Session,
+) -> None:
+    rotating = FakeIdentityProvider()
+    application = create_app(db_settings, session_factory=app_sessions, identity_provider=rotating)
+    application.dependency_overrides[get_auth_settings] = lambda: auth_settings
+    rotating.key = rotating.rotate_key()
+
+    response = sign_in(new_client(application), rotating, subject="sub-a", email=EMAIL)
+
+    assert response.headers["location"] == "http://localhost:5173/"
+    assert rotating.refresh_count == 1
     assert count(owner_session, "sessions") == 1

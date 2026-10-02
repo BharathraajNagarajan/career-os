@@ -111,3 +111,33 @@ def test_authorization_url_has_only_identity_scopes_and_pkce(idp: FakeIdentityPr
     assert query["state"] == ["s"]
     assert query["nonce"] == ["n"]
     assert query["response_type"] == ["code"]
+
+
+def test_rotated_key_is_found_by_refetching_the_jwks_once() -> None:
+    idp = FakeIdentityProvider()
+    new_key = idp.rotate_key()
+    claims = idp.claims(NONCE, subject="sub-1", email="ada@example.test")
+
+    identity = verify_id_token(idp.sign(claims, key=new_key), provider=idp, nonce=NONCE)
+
+    assert identity.subject == "sub-1"
+    assert idp.refresh_count == 1
+
+
+def test_unknown_key_still_missing_after_refetch_is_rejected() -> None:
+    idp = FakeIdentityProvider()
+    stranger = RSAKey.generate_key(2048, {"kid": "never-published", "use": "sig"})
+    claims = idp.claims(NONCE, subject="sub-1", email="ada@example.test")
+
+    with pytest.raises(OidcError):
+        verify_id_token(idp.sign(claims, key=stranger), provider=idp, nonce=NONCE)
+
+    assert idp.refresh_count == 1
+
+
+def test_known_key_does_not_refetch(idp: FakeIdentityProvider) -> None:
+    before = idp.refresh_count
+
+    verify(idp, idp.sign(valid_claims(idp)))
+
+    assert idp.refresh_count == before

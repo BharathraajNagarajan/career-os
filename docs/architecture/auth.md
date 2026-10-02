@@ -50,7 +50,7 @@ The application verifies the token itself (`app/auth/oidc.py`), with Authlib's `
 - `nonce` equals the cookie's value (constant-time comparison),
 - `email_verified` is true and `email` is present.
 
-Discovery and JWKS documents are cached for 15 minutes. The provider sits behind the `IdentityProvider` protocol; tests use `FakeIdentityProvider`, which signs tokens with a test RSA key and enforces PKCE, so no test touches the network.
+Discovery and JWKS documents are cached for 15 minutes. If the token's `kid` is not in the cached JWKS (the provider rotated its signing key), verification refetches the JWKS once, bypassing the cache, and retries; it never refetches more than once per verification, and a `kid` still missing afterwards is rejected. The provider sits behind the `IdentityProvider` protocol; tests use `FakeIdentityProvider`, which signs tokens with a test RSA key and enforces PKCE, so no test touches the network.
 
 ### Account resolution
 
