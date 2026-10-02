@@ -1,6 +1,7 @@
 from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -36,6 +37,11 @@ class Settings(BaseAppSettings):
     job_backoff_base_seconds: float = Field(default=10.0, gt=0)
     job_backoff_max_seconds: float = Field(default=3600.0, gt=0)
     llm_daily_cost_cap_usd: Decimal = Field(default=Decimal("1.00"), ge=0, decimal_places=2)
+    artifact_storage_dir: Path = Path("/srv/artifacts")
+    resume_max_bytes: int = Field(default=5 * 1024 * 1024, gt=0)
+    resume_max_pages: int = Field(default=10, gt=0)
+    parse_timeout_seconds: float = Field(default=30.0, gt=0)
+    extracted_text_max_chars: int = Field(default=200_000, gt=0)
 
 
 class AuthSettings(BaseAppSettings):
