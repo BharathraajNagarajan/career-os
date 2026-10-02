@@ -14,6 +14,8 @@ WORKDIR /srv/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+COPY backend/alembic.ini ./
+COPY backend/alembic ./alembic
 COPY backend/app ./app
 
 RUN useradd --system --uid 10001 --no-create-home careeros
