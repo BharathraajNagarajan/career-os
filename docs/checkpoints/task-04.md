@@ -33,9 +33,9 @@ Also delivered: migration 0003 (four tables, grants, working downgrade, separate
 - Account deletion for the synthetic user: `POST /api/v1/account/deletion` 202. Before: 2 artifacts, 2 resumes, 2 jobs, 1 session, 1 user, 2 files. After the worker ran: 0, 0, 0, 0, 0 users, 0 files, and the user's directory is gone. Worker log order: `user_objects_deleted`, then `account_deleted`.
 - A second synthetic user uploaded through the Vite proxy on `127.0.0.1:5173` (202) and was deleted the same way, confirming the proxy passes multipart bodies. No synthetic rows or files remain.
 
-**Live UI check (check 5, yours):** pending. Steps and sample files are in the hand-off message.
+**Live UI check (check 5, owner): passed.** Run in the browser at `http://localhost:5173`. The browser check must use `localhost`, not `127.0.0.1`: the Google OAuth redirect URI is registered for `localhost`, and the session cookie is host-bound, so `127.0.0.1` would break the sign-in flow (API curl checks still use `127.0.0.1`). Signed in, created lane Platform, uploaded the synthetic `ui-check-resume.docx` (Processing, then Ready), assigned it to Platform, set it as the lane default, downloaded it (saved and opened correctly), and confirmed the resume row offers only the lane select, Rename, Archive and Download, with no edit or replace option. The duplicate upload was not repeated in the browser; it is covered by the live API check (409) and the automated tests.
 
-**GitHub Actions:** pending push approval.
+**GitHub Actions:** run 37052570713 on `111e58e`: completed, success. Jobs backend, frontend and secrets all succeeded (including the symlink-escape storage test on Linux).
 
 ## Changes outside the expected file set
 
@@ -81,8 +81,8 @@ Also delivered: migration 0003 (four tables, grants, working downgrade, separate
 | Live API: duplicate 409, renamed `.txt` 415, oversized 413, missing CSRF 403 | Pass |
 | Live API: download headers and byte-identical file | Pass |
 | Live API: account deletion removes rows and storage prefix | Pass |
-| Live UI check (owner) | Pending |
-| GitHub Actions (backend, frontend, secrets) | Pending push approval |
+| Live UI check (owner), at `localhost:5173` | Pass |
+| GitHub Actions (backend, frontend, secrets), run 37052570713 on `111e58e` | Pass |
 
 ## Deviations from the frozen spec
 
@@ -90,8 +90,7 @@ None. Where the brief and spec could differ I followed the spec: object storage 
 
 ## Unresolved issues
 
-- Live UI check (check 5) is pending and is yours to run.
-- Push and CI confirmation are pending your approval to push.
+- Cosmetic: the app has no favicon, so the browser shows a cached icon from another `localhost` app. To be fixed in Task 10.
 - S3-compatible storage adapter is not built (needs the deployment target, O-6). OCR for scanned PDFs is deferred; such files fail as `unreadable`.
 - The outline heuristic treats a single upper-case word on its own line (for example a skill acronym) as a heading; accepted for a deterministic, generic first version and documented.
 - DOCX has no page limit (no reliable page count); it is bounded by upload size, the zip guard and the text cap.
@@ -100,8 +99,8 @@ None. Where the brief and spec could differ I followed the spec: object storage 
 
 ## Git state
 
-Branch `task-04-profile-resumes` from `main` (merge commit of Task 3). Commits (oldest first): `docs: Task 4 brief`; tables, grants and settings; storage, upload guards, extraction, API and parse job; unit tests; schema tests; API tests; parse job, deletion and isolation tests with regenerated OpenAPI; type annotations; frontend pages; Docker, config and docs; this checkpoint. Not pushed yet. PR URL: none (gh is not authenticated; compare URL will be given after the push). CI status: pending.
+Branch `task-04-profile-resumes` from `main` (merge commit of Task 3). Commits (oldest first): `docs: Task 4 brief`; tables, grants and settings; storage, upload guards, extraction, API and parse job; unit tests; schema tests; API tests; parse job, deletion and isolation tests with regenerated OpenAPI; type annotations; frontend pages; Docker, config and docs; this checkpoint. Pushed. PR URL: none (gh is not authenticated); compare URL: https://github.com/BharathraajNagarajan/career-os/compare/main...task-04-profile-resumes. CI status: green on `111e58e` (run 37052570713); the checkpoint update commit is pending push and CI.
 
 ## Recommendation
 
-Approve once the live UI check passes and Actions are green. Every acceptance criterion has automated tests plus live-stack evidence, the frozen spec is followed without deviation, and the one surprise (RESTRICT did not fail) changed documentation, not behavior. Remaining risk is limited to the browser flow, which only you can run.
+Approve. The live UI check passed, Actions are green for backend, frontend and secrets, and every acceptance criterion has automated tests plus live-stack evidence. The frozen spec is followed without deviation, and the one surprise (RESTRICT did not fail) changed documentation, not behavior. Remaining items are the deferred S3 adapter and OCR, and the cosmetic favicon (Task 10).
