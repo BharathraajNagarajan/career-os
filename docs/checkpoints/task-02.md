@@ -65,7 +65,7 @@ Also: UUIDv7 `new_id()`, `TextEnum` + named CHECKs mirrored by `StrEnum`, `Event
 | `uv run pytest` without `TEST_ADMIN_DATABASE_URL` | ✅ unit tests pass, DB tests skipped |
 | Migrations on empty DB: upgrade → check → downgrade → upgrade | ✅ no drift |
 | Frontend: lint, typecheck, test, build | ✅ unchanged (3 tests passed, build OK) |
-| GitHub Actions run 36978365452 @ `525b597` | ✅ backend (incl. Postgres service, pytest, migration step), frontend, secrets |
+| GitHub Actions run 36978365452 @ `4698df7` | ✅ backend (incl. Postgres service, pytest, migration step), frontend, secrets |
 
 **Deviations from the frozen spec**
 
@@ -83,9 +83,9 @@ None to the schema, invariants or architecture. Two implementation interpretatio
 **Git state**
 
 - Branch: `task-02-database-foundation`, pushed to origin
-- Commits: `8c477f3` brief, `4965719` DB foundation, `b61308a` job queue and worker, `525b597` migrate service/CI/docs, plus this report
+- Commits: `28cdab9` brief, `7da2849` DB foundation, `b7b6495` job queue and worker, `4698df7` migrate service/CI/docs, plus this report
 - PR: not opened (gh unauthenticated). Compare URL: https://github.com/BharathraajNagarajan/career-os/compare/main...task-02-database-foundation?expand=1
-- CI on `525b597`: backend ✅, frontend ✅, secrets ✅
+- CI on `4698df7`: backend ✅, frontend ✅, secrets ✅
 
 **Recommendation: approve Task 2.**
 
