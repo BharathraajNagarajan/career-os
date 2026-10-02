@@ -7,14 +7,17 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
 from pydantic import SecretStr
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import Environment, Settings
+from app.config import AuthSettings, Environment, Settings, get_auth_settings
 from app.core.db import database_url, session_factory
 from app.db.bootstrap import APP_ROLE, bootstrap
+from app.main import create_app
+from tests.auth.fake_idp import FAKE_CLIENT_ID, FakeIdentityProvider
 
 BACKEND = Path(__file__).resolve().parents[2]
 
@@ -91,3 +94,32 @@ def db_settings(database: Database) -> Settings:
         job_backoff_max_seconds=600,
         job_visibility_timeout_seconds=60,
     )
+
+
+@pytest.fixture(scope="session")
+def idp() -> FakeIdentityProvider:
+    return FakeIdentityProvider()
+
+
+@pytest.fixture
+def auth_settings() -> AuthSettings:
+    return AuthSettings(
+        environment=Environment.TEST,
+        session_secret=SecretStr("test-session-secret-" + "x" * 24),
+        session_cookie_secure=False,
+        app_base_url="http://localhost:5173",
+        google_client_id=FAKE_CLIENT_ID,
+        google_client_secret=SecretStr("test-client-secret"),
+    )
+
+
+@pytest.fixture
+def app(
+    db_settings: Settings,
+    app_sessions: sessionmaker[Session],
+    idp: FakeIdentityProvider,
+    auth_settings: AuthSettings,
+) -> FastAPI:
+    application = create_app(db_settings, session_factory=app_sessions, identity_provider=idp)
+    application.dependency_overrides[get_auth_settings] = lambda: auth_settings
+    return application
