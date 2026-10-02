@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 1 (repository scaffold and CI). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 2 (database foundation, tenancy pattern, events table, job queue). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -18,7 +18,7 @@ A modular monolith: one Python codebase running an API process (FastAPI) and a w
 backend/    Python API and worker (FastAPI, uv, pytest, ruff, mypy)
 frontend/   React SPA (Vite, TypeScript, TanStack Query, React Router, Vitest, ESLint)
 infra/      Dockerfile and docker-compose.yml for local development
-docs/       Frozen specification, ADRs, threat model
+docs/       Frozen specification, ADRs, architecture notes, threat model
 ```
 
 ## Prerequisites
@@ -31,23 +31,28 @@ docs/       Frozen specification, ADRs, threat model
 
 ```bash
 cp .env.example .env
-# edit .env and set POSTGRES_PASSWORD to any local value
-make up
+# edit .env and set POSTGRES_PASSWORD and APP_DB_PASSWORD to two different URL-safe local values
+docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
-This starts Postgres, the API on http://localhost:8000, the worker, and the frontend on http://localhost:5173. All ports bind to 127.0.0.1 only. The API reloads on backend changes and the frontend uses Vite hot reload.
+(`make up` runs the same command where GNU Make is installed.)
+
+This starts Postgres, runs the one-shot `migrate` service (creates the `career_os_app` role and applies Alembic migrations), then starts the API on http://localhost:8000, the worker, and the frontend on http://localhost:5173. The API and worker connect as `career_os_app`, never as the database owner. All ports bind to 127.0.0.1 only. The API reloads on backend changes and the frontend uses Vite hot reload.
 
 - API health: http://localhost:8000/healthz
 - API docs (non-production only): http://localhost:8000/docs
 
-Stop with `make down`.
+Stop with `docker compose -f infra/docker-compose.yml --env-file .env down` (or `make down`).
 
 ## Run without Docker
 
 ```bash
 cd backend
 uv sync
-export DATABASE_URL=postgresql://career_os:yourpassword@localhost:5432/career_os
+export MIGRATION_DATABASE_URL=postgresql://career_os:ownerpassword@127.0.0.1:5432/career_os
+export APP_DB_PASSWORD=apppassword
+uv run python -m app.db.bootstrap && uv run alembic upgrade head
+export DATABASE_URL=postgresql://career_os_app:apppassword@127.0.0.1:5432/career_os
 uv run uvicorn app.main:create_app --factory --reload --no-access-log
 uv run python -m app.worker
 ```
@@ -66,19 +71,44 @@ Settings come only from environment variables; the application never reads a `.e
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | required | PostgreSQL connection string; never logged |
+| `DATABASE_URL` | required (API, worker) | PostgreSQL URL for the `career_os_app` role; never logged |
+| `MIGRATION_DATABASE_URL` | required (migrations only) | Owner URL used only by `app.db.bootstrap` and Alembic; the API and worker never receive it |
+| `APP_DB_PASSWORD` | required (bootstrap, Compose) | Password for `career_os_app`, at least 12 URL-safe characters |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | required (Compose) | Database name and owner credentials for the Postgres container |
 | `ENVIRONMENT` | `local` | `local`, `test` or `production`; production disables API docs |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `LOG_JSON` | `true` | JSON logs; `false` for human-readable console output |
 | `CORS_ALLOWED_ORIGINS` | `[]` | JSON list of allowed browser origins |
-| `WORKER_POLL_INTERVAL_SECONDS` | `5` | Worker loop interval |
+| `WORKER_POLL_INTERVAL_SECONDS` | `5` | Worker sleep when no job is ready |
+| `JOB_VISIBILITY_TIMEOUT_SECONDS` | `900` | A running job older than this is re-queued (crash recovery) |
+| `JOB_BACKOFF_BASE_SECONDS` | `10` | First retry delay; doubles per attempt, with jitter |
+| `JOB_BACKOFF_MAX_SECONDS` | `3600` | Retry delay cap |
+| `TEST_ADMIN_DATABASE_URL` | unset | Owner URL for database tests; unset skips tests marked `db` |
 | `LLM_DAILY_COST_CAP_USD` | `1.00` | Per-user daily model cost cap (spec 13.1); enforced from Task 5 |
+
+## Database, migrations and database tests
+
+See [docs/architecture/database.md](docs/architecture/database.md) for roles and grants, conventions, tenancy rules and the job lifecycle.
+
+```bash
+docker compose -f infra/docker-compose.yml --env-file .env run --rm migrate   # bootstrap role + alembic upgrade head
+
+docker compose -f infra/docker-compose.yml --env-file .env up -d postgres
+cd backend
+export TEST_ADMIN_DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@127.0.0.1:5432/<POSTGRES_DB>
+export APP_DB_PASSWORD=<value from .env>
+uv run pytest
+```
+
+Database tests create and drop their own `career_os_test_<random>` database. Use `127.0.0.1` rather than `localhost` on Windows (see the architecture note).
 
 ## Logging
 
 Logs are structured JSON with an allowlist of field names ([backend/app/core/logging.py](backend/app/core/logging.py)). Fields not on the list are dropped and counted, and every value, message and exception text passes through redaction for email addresses, bearer tokens, JWTs, Google tokens, connection strings and long secret-like strings. Request logs record the route template, never the raw path. Career and email content must never be logged.
 
 ## Checks
+
+Where GNU Make is installed:
 
 ```bash
 make check           # everything below
@@ -87,7 +117,9 @@ make check-frontend  # eslint, tsc, vitest, vite build
 make check-secrets   # gitleaks over the full git history
 ```
 
-CI runs the same three jobs on every push and pull request ([.github/workflows/ci.yml](.github/workflows/ci.yml)). To scan before each commit, run `pre-commit install`.
+Without Make, run the commands from the [Makefile](Makefile) directly (`cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest`, and the `npm run` scripts in `frontend/`).
+
+CI runs the same three jobs on every push and pull request, with a PostgreSQL 16 service for database tests and a migration check (upgrade, `alembic check`, downgrade, upgrade) ([.github/workflows/ci.yml](.github/workflows/ci.yml)). To scan before each commit, run `pre-commit install`.
 
 ## Working rules
 

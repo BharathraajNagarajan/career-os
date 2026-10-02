@@ -4,7 +4,7 @@
 
 1. `docker compose up` starts Postgres, API, worker, frontend — **verified**. All four services came up on every run; postgres/api report `healthy`, worker and frontend have no healthcheck defined (by design — worker is a loop, frontend is dev-only) but both stayed running.
 2. `/healthz` returns OK — **verified**. `200 {"status":"ok","version":"0.1.0"}` with an `x-request-id` header, both directly (port 8000) and through the Vite proxy (port 5173).
-3. CI runs ruff, mypy, pytest, ESLint, tsc, Vitest, gitleaks on every push and passes — **verified**. GitHub Actions run for commit `1bc29a1` is green: backend, frontend, secrets all passed. Locally, the same seven checks all pass (see table).
+3. CI runs ruff, mypy, pytest, ESLint, tsc, Vitest, gitleaks on every push and passes — **verified**. GitHub Actions run for commit `d5d03ca` is green: backend, frontend, secrets all passed. Locally, the same seven checks all pass (see table).
 
 **Evidence**
 
@@ -14,7 +14,7 @@
 - Frontend at `localhost:5173` (confirmed in-browser): "Career OS / Home / ... / API connected (version 0.1.0) / Created by Bharathraaj Nagarajan" — proves the Vite→API proxy end-to-end.
 - Backend: ruff check clean, ruff format clean (14 files), mypy clean (14 files), pytest 33 passed.
 - Frontend: ESLint clean, tsc clean, Vitest 3 passed, `vite build` succeeded (346 KB / 109 KB gzip).
-- GitHub Actions on `main` @ `1bc29a1`: backend ✅, frontend ✅, secrets ✅.
+- GitHub Actions on `main` @ `d5d03ca`: backend ✅, frontend ✅, secrets ✅.
 
 **Changes made during verification**
 
@@ -57,7 +57,7 @@
 | `tsc -b --pretty` | ✅ Pass |
 | `vitest run` | ✅ Pass (3 passed) |
 | `vite build` | ✅ Pass |
-| CI on GitHub (`main` @ `1bc29a1`): backend / frontend / secrets | ✅ / ✅ / ✅ |
+| CI on GitHub (`main` @ `d5d03ca`): backend / frontend / secrets | ✅ / ✅ / ✅ |
 
 **Deviations from the frozen spec**
 
@@ -72,10 +72,10 @@ None. The two config changes (Vite polling, `.gitignore` entry) are dev-environm
 **Git state**
 
 - Branch: `main`
-- Commit: `1bc29a1` — "Task 1: repository scaffold and CI"
+- Commit: `d5d03ca` — "Task 1: repository scaffold and CI"
 - Remote: `https://github.com/BharathraajNagarajan/career-os.git`
 - Working tree: clean
-- CI run on `1bc29a1`: green — backend ✅, frontend ✅, secrets ✅
+- CI run on `d5d03ca`: green — backend ✅, frontend ✅, secrets ✅
 
 **Recommendation: Approve Task 1.**
 

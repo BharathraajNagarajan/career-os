@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from collections.abc import Callable
 
 import pytest
@@ -31,3 +32,12 @@ def read_logs(log_stream: io.StringIO) -> Callable[[], list[dict[str, object]]]:
         return [json.loads(line) for line in log_stream.getvalue().splitlines() if line]
 
     return read
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if os.environ.get("TEST_ADMIN_DATABASE_URL"):
+        return
+    skip_db = pytest.mark.skip(reason="TEST_ADMIN_DATABASE_URL is not set")
+    for item in items:
+        if "db" in item.keywords:
+            item.add_marker(skip_db)
