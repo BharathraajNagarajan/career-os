@@ -37,17 +37,16 @@ class ResumeRepository(UserScopedRepository[Resume]):
 
     def list_with_artifacts(self, *, user_id: uuid.UUID) -> Sequence[tuple[Resume, Artifact]]:
         statement = self._with_artifact(user_id).order_by(Resume.created_at.desc(), Resume.id)
-        return self.session.execute(statement).tuples().all()
+        return [(resume, artifact) for resume, artifact in self.session.execute(statement)]
 
     def get_with_artifact(self, *, user_id: uuid.UUID, id: uuid.UUID) -> tuple[Resume, Artifact]:
-        row = (
-            self.session.execute(self._with_artifact(user_id).where(Resume.id == id))
-            .tuples()
-            .one_or_none()
-        )
+        row = self.session.execute(
+            self._with_artifact(user_id).where(Resume.id == id)
+        ).one_or_none()
         if row is None:
             raise NotFound("Resume")
-        return row
+        resume, artifact = row
+        return resume, artifact
 
     def find_by_artifact(self, *, user_id: uuid.UUID, artifact_id: uuid.UUID) -> Resume | None:
         return self.session.scalars(
