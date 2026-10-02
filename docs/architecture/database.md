@@ -11,9 +11,13 @@ PostgreSQL 16 is the system of record and the job queue (ADR-002, ADR-006). Acce
 
 | Table | `career_os_app` privileges | Why |
 | --- | --- | --- |
-| `users` | SELECT, INSERT, UPDATE | Account deletion is a privileged path (Task 3) |
+| `users` | SELECT, INSERT, UPDATE | No DELETE: account deletion goes through `delete_user_account()` (below) |
+| `auth_identities` | SELECT, INSERT, UPDATE | Provider identities; holds no tokens |
+| `sessions` | SELECT, INSERT, UPDATE, DELETE | Hashed session tokens; sign-out and revocation delete rows |
 | `domain_events` | SELECT, INSERT | INV-04: append-only is enforced by the database, not by convention |
 | `jobs` | SELECT, INSERT, UPDATE, DELETE | Queue bookkeeping |
+
+`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities` and `sessions`. See [auth.md](auth.md).
 
 The bootstrap command creates `career_os_app`, or resets its password if it exists, with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`. It is idempotent. Table grants live in the migration that creates each table, so they are versioned and reviewed with the schema. Roles are cluster-wide: bootstrapping any database on the same server, including a test database, sets the same role's password, so every environment on one server must share `APP_DB_PASSWORD`. The password is interpolated into connection URLs and must be URL-safe.
 

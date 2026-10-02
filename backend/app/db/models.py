@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, Text, func, text
+from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,10 @@ from app.db.base import (
 class UserStatus(StrEnum):
     ACTIVE = "active"
     DELETION_REQUESTED = "deletion_requested"
+
+
+class AuthProvider(StrEnum):
+    GOOGLE = "google"
 
 
 class AggregateType(StrEnum):
@@ -63,6 +67,29 @@ class User(HasId, HasCreatedAt, Base):
         TextEnum(UserStatus), server_default=UserStatus.ACTIVE.value
     )
     deleted_at: Mapped[datetime | None]
+
+
+class AuthIdentity(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "auth_identities"
+    __table_args__ = owned_table_args(
+        enum_check("provider", AuthProvider),
+        UniqueConstraint("provider", "provider_subject"),
+    )
+
+    provider: Mapped[AuthProvider] = mapped_column(TextEnum(AuthProvider))
+    provider_subject: Mapped[str] = mapped_column(Text)
+    email_at_login: Mapped[str] = mapped_column(Text)
+    last_login_at: Mapped[datetime]
+
+
+class UserSession(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "sessions"
+    __table_args__ = owned_table_args()
+
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    last_seen_at: Mapped[datetime]
+    expires_at: Mapped[datetime]
+    user_agent_hash: Mapped[str | None] = mapped_column(Text)
 
 
 class DomainEvent(UserOwned, Base):

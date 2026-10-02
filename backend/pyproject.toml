@@ -13,6 +13,9 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
     "uuid6>=2024.7.10",
+    "authlib>=1.8.0",
+    "httpx>=0.28.1",
+    "cryptography>=50.0.2",
 ]
 
 [dependency-groups]
@@ -45,6 +48,10 @@ python_version = "3.12"
 strict = true
 files = ["app", "tests", "alembic"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["authlib.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

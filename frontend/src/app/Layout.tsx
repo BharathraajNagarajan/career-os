@@ -1,10 +1,11 @@
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 export function Layout() {
   return (
     <div className="shell">
       <header className="shell-header">
-        <span className="wordmark">Career OS</span>
+        <span className="wordmark">Career OS</span>{" "}
+        <Link to="/settings">Settings</Link>
       </header>
       <main className="shell-main">
         <Outlet />
