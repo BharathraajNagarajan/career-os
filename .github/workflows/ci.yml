@@ -31,6 +31,11 @@ jobs:
     env:
       TEST_ADMIN_DATABASE_URL: postgresql://ci:ci-password@localhost:5432/career_os
       APP_DB_PASSWORD: ci-app-password
+      REQUIRE_DB_TESTS: "1"
+      SESSION_SECRET: ci-throwaway-session-secret-0123456789
+      SESSION_COOKIE_SECURE: "false"
+      GOOGLE_CLIENT_ID: ci-throwaway-client-id
+      GOOGLE_CLIENT_SECRET: ci-throwaway-client-secret
     defaults:
       run:
         working-directory: backend
@@ -45,6 +50,10 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest -rs
+      - name: OpenAPI contract is up to date
+        run: |
+          uv run python -m app.openapi_export openapi.json
+          git diff --exit-code -- openapi.json
       - name: Migrations (upgrade, drift check, downgrade, upgrade)
         env:
           MIGRATION_DATABASE_URL: postgresql://ci:ci-password@localhost:5432/career_os
@@ -68,6 +77,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Generated API types are up to date
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/api/schema.d.ts
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test

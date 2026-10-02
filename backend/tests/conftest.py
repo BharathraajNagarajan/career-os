@@ -37,6 +37,8 @@ def read_logs(log_stream: io.StringIO) -> Callable[[], list[dict[str, object]]]:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if os.environ.get("TEST_ADMIN_DATABASE_URL"):
         return
+    if os.environ.get("REQUIRE_DB_TESTS") == "1":
+        raise pytest.UsageError("REQUIRE_DB_TESTS=1 but TEST_ADMIN_DATABASE_URL is not set")
     skip_db = pytest.mark.skip(reason="TEST_ADMIN_DATABASE_URL is not set")
     for item in items:
         if "db" in item.keywords:
