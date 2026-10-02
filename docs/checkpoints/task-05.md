@@ -79,7 +79,7 @@ Also delivered: logging allowlist extended with run, prompt, model, token, cost 
 | Stack: refusal with a tiny test cap, no provider call | Pass |
 | Stack: review confirm, stale, repeat, reject, no handler | Pass |
 | Optional live Anthropic call | Not run (no key in `.env`) |
-| GitHub Actions (backend, frontend, secrets) | Pending push |
+| GitHub Actions (backend, frontend, secrets), run 37079684145 on `15c7294` | Pass |
 
 ## Deviations from the frozen spec
 
@@ -97,8 +97,8 @@ None. Clarifications where the brief left room: a refused call is not recorded a
 
 ## Git state
 
-Branch `task-05-model-gateway` from `main` (merge of Task 4). Commits (oldest first): `docs: Task 5 brief`; schema, gateway, prompt registry and review framework; gateway, review and isolation tests with JSONB null handling and OpenAPI; configuration, Compose and docs; frontend; deterministic budget race test and six-decimal money; this checkpoint. Not pushed yet. PR URL: none (gh is not authenticated); compare URL once pushed: https://github.com/BharathraajNagarajan/career-os/compare/main...task-05-model-gateway. CI status: pending push.
+Branch `task-05-model-gateway` from `main` (merge of Task 4). Commits (oldest first): `docs: Task 5 brief`; schema, gateway, prompt registry and review framework; gateway, review and isolation tests with JSONB null handling and OpenAPI; configuration, Compose and docs; frontend; deterministic budget race test and six-decimal money; this checkpoint. Pushed. PR URL: none (gh is not authenticated); compare URL: https://github.com/BharathraajNagarajan/career-os/compare/main...task-05-model-gateway. CI status: green on `15c7294` (run 37079684145); backend, frontend and secrets all succeeded. This checkpoint update commit is pending push and CI.
 
 ## Recommendation
 
-Approve once Actions are green. Every acceptance criterion has automated tests plus live-stack evidence, and the frozen spec is followed without deviation. The two caveats are that the Anthropic adapter is mock-tested only (run the optional live check when you have a key) and that no review handler exists in production until the first producers arrive.
+Approve. Actions are green for backend, frontend and secrets. Every acceptance criterion has automated tests plus live-stack evidence, and the frozen spec is followed without deviation. The two caveats are that the Anthropic adapter is mock-tested only (run the optional live check when you have a key) and that no review handler exists in production until the first producers arrive.
