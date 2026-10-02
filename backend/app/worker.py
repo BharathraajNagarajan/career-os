@@ -9,6 +9,7 @@ from app import __version__
 from app.config import Settings, get_settings
 from app.core.db import create_db_engine, session_factory
 from app.core.logging import configure_logging, get_logger
+from app.jobs.handlers import register_job_handlers
 from app.jobs.registry import job_registry
 from app.jobs.runner import JobRunner
 
@@ -65,6 +66,7 @@ def main() -> None:
     stop = threading.Event()
     install_signal_handlers(stop)
     worker_id = worker_identity()
+    register_job_handlers(job_registry)
     engine = create_db_engine(settings.database_url)
     runner = JobRunner(session_factory(engine), job_registry, settings, worker_id)
     try:

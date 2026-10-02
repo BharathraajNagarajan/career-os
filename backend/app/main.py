@@ -1,18 +1,42 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session, sessionmaker
 
 from app import __version__
+from app.auth.oidc import IdentityProvider
+from app.auth.router import router as auth_router
 from app.config import Settings, get_settings
+from app.core.db import create_db_engine
+from app.core.db import session_factory as make_session_factory
+from app.core.errors import install_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    session_factory: sessionmaker[Session] | None = None,
+    identity_provider: IdentityProvider | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings)
+    engine = None if session_factory else create_db_engine(settings.database_url)
+    if session_factory is None and engine is not None:
+        session_factory = make_session_factory(engine)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        if engine is not None:
+            engine.dispose()
 
     app = FastAPI(
+        lifespan=lifespan,
         title="Career OS API",
         version=__version__,
         docs_url=None if settings.is_production else "/docs",
@@ -29,7 +53,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             expose_headers=[REQUEST_ID_HEADER],
         )
     app.add_middleware(RequestContextMiddleware)
+    app.state.session_factory = session_factory
+    app.state.identity_provider = identity_provider
+    install_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
 
     get_logger(__name__).info(
         "api_configured", environment=settings.environment.value, version=__version__
