@@ -92,7 +92,13 @@ Settings come only from environment variables; the application never reads a `.e
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | required for sign-in (API) | Google OAuth web client; the secret is never logged. Not passed to the worker |
 | `TEST_ADMIN_DATABASE_URL` | unset | Owner URL for database tests; unset skips tests marked `db` |
 | `REQUIRE_DB_TESTS` | unset | Set to `1` (CI does) to fail the test run instead of skipping database tests when `TEST_ADMIN_DATABASE_URL` is missing |
-| `LLM_DAILY_COST_CAP_USD` | `1.00` | Per-user daily model cost cap (spec 13.1); enforced from Task 5 |
+| `LLM_DAILY_COST_CAP_USD` | `1.00` | Per-user daily model cost cap (spec 13.1); enforced by the model gateway from `llm_runs` totals (UTC day) |
+| `LLM_PROVIDER` | `fake` | `fake` or `anthropic`. Nothing calls a real API unless this is `anthropic` |
+| `ANTHROPIC_API_KEY` | unset (API, worker only) | Required when `LLM_PROVIDER=anthropic`; startup fails otherwise. Never logged |
+| `LLM_MODEL_FAST`, `LLM_MODEL_REASONING` | `fake-fast`, `fake-reasoning` | Model ids for the two tiers. Startup fails if either has no price |
+| `LLM_MODEL_PRICES` | fake prices | JSON map of model id to `input_usd_per_mtok` and `output_usd_per_mtok`; assumptions until verified against your billing |
+| `LLM_REQUEST_TIMEOUT_SECONDS` | `60` | Per provider call |
+| `LLM_DEFAULT_MAX_OUTPUT_TOKENS` | `1024` | Default output ceiling for callers that do not pass one |
 | `ARTIFACT_STORAGE_DIR` | `/srv/artifacts` | Directory of the filesystem artifact store (API and worker only; Compose mounts the `artifact-data` volume here). An S3-compatible adapter replaces it at deployment |
 | `RESUME_MAX_BYTES` | `5242880` | Largest accepted resume upload (5 MiB); larger uploads get 413 |
 | `RESUME_MAX_PAGES` | `10` | Largest accepted PDF page count; more pages fail parsing with `too_many_pages` |
@@ -124,6 +130,10 @@ The API contract is [backend/openapi.json](backend/openapi.json); regenerate it 
 ## Profile, resumes and lanes
 
 One profile per user (constraints, target roles, communication preferences), immutable resume uploads (PDF and DOCX, sniffed by content, size limited, deduplicated by SHA-256) with text and outline extraction in the worker and no model call, and resume lanes. Originals are stored under `ARTIFACT_STORAGE_DIR` and are never rewritten; the UI offers no way to edit a resume file. See [docs/architecture/artifacts.md](docs/architecture/artifacts.md).
+
+## Model gateway and review items
+
+All model work goes through one internal gateway: tiers and prices from configuration, versioned prompts, a recorded `llm_runs` row per call, one repair retry for invalid structured output, and a per-user daily cost cap that reserves the worst case before a call and settles the real cost after. The review framework holds proposals until the user confirms, edits or rejects them, and confirming runs the same command a manual action would. Nothing in the app calls a model yet; the first producers arrive with JD ingestion and resume extraction. See [docs/architecture/llm.md](docs/architecture/llm.md) and [docs/architecture/review.md](docs/architecture/review.md). The Anthropic placeholders in `.env.example` are commented out; copy them in only when you want a real call.
 
 ## Logging
 

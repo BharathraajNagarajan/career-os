@@ -20,8 +20,10 @@ PostgreSQL 16 is the system of record and the job queue (ADR-002, ADR-006). Acce
 | `artifacts` | SELECT, INSERT, and UPDATE on `extracted_text`, `extraction_status`, `extraction_error_code` only | INV-05: the stored file's identity (`storage_key`, `sha256`, `byte_size`, `mime_type`, `original_filename`) cannot change by privilege. No DELETE |
 | `resumes` | SELECT, INSERT, UPDATE | Archive only; no DELETE |
 | `resume_lanes` | SELECT, INSERT, UPDATE | Archive only; no DELETE |
+| `llm_runs` | SELECT, INSERT, and UPDATE on `status`, `error_code`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_usd`, `output`, `settled_at` only | A run is a record of what was sent and bought: its identity, prompt, model, reservation and manifest cannot change by privilege; only settlement can. No DELETE |
+| `review_items` | SELECT, INSERT, and UPDATE on `status`, `decided_at`, `decided_payload`, `decision_note`, `state_version`, `updated_at` only | The proposal (`proposed_payload`, type, source, rationale) is immutable once written. No DELETE |
 
-`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes` and `resume_lanes`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
+`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes`, `resume_lanes`, `llm_runs` and `review_items`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
 
 The bootstrap command creates `career_os_app`, or resets its password if it exists, with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`. It is idempotent. Table grants live in the migration that creates each table, so they are versioned and reviewed with the schema. Roles are cluster-wide: bootstrapping any database on the same server, including a test database, sets the same role's password, so every environment on one server must share `APP_DB_PASSWORD`. The password is interpolated into connection URLs and must be URL-safe.
 
@@ -45,6 +47,12 @@ Event payload evolution: `PayloadRegistry.register(event_type, Model, version=N,
 ## Circular foreign keys (migration 0003)
 
 `resumes.lane_id` references `resume_lanes`, and `resume_lanes.default_resume_id` references `resumes`; both are composite `(user_id, id)` keys, so neither can point at another user's row. Neither table can be created with both constraints inline, so the migration creates `resume_lanes` and `resumes` first and adds `fk_resume_lanes_user_id_default_resume_id_resumes` afterwards with an `ALTER`; the downgrade drops that constraint before the tables. The model marks it `use_alter=True`. All three references between these tables and `artifacts` use `NO ACTION` (see [artifacts.md](artifacts.md) for why, and for what was and was not observed about `RESTRICT`).
+
+## LLM runs and review items (migration 0004)
+
+`llm_runs` is user-owned and settled once: a row is inserted as `reserved` with its worst-case `reserved_cost_usd`, then updated to `succeeded` or `failed` with the real `cost_usd`, tokens and latency. Check constraints keep `status`, `cost_usd` and `settled_at` consistent (a reserved row has neither; a settled row has both), tie `attempt = 2` to a `repair_of_run_id` (composite FK to `llm_runs`, so a repair can only point at the same user's run), and keep `purpose`, `tier` and `provider` to closed lists. The index `(user_id, created_at)` serves the daily-total query. No prompt or model text is stored; `context_manifest` and `output` are typed JSONB, and nullable JSONB columns use `none_as_null` so "no output" is SQL `NULL`, not JSON `null`.
+
+`review_items` is user-owned with a `state_version`. Check constraints make `decided_at` present exactly when the status is not `pending` and allow `decided_payload` only on confirmed items. `llm_run_id` is a composite FK to `llm_runs`. `evidence_ref_id` is a plain uuid with no FK because it will point at tables that do not exist yet; it is always re-resolved through a user-scoped repository before use (INV-18).
 
 ## Tenancy and INV-18
 
