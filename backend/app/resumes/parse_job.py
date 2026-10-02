@@ -56,7 +56,7 @@ def make_parse_resume_handler(
         if resume.artifact_id != artifact.id or artifact.extraction_status is not (
             ExtractionStatus.PENDING
         ):
-            log.info("parse_skipped", extraction_status=artifact.extraction_status.value)
+            log.info("parse_skipped", outcome=artifact.extraction_status.value)
             return
         try:
             with storage.open(artifact.storage_key) as handle:
@@ -79,7 +79,7 @@ def make_parse_resume_handler(
         )
         log.info(
             "resume_parsed",
-            line_count=None if result.outline is None else result.outline.line_count,
+            count=None if result.outline is None else result.outline.line_count,
         )
 
     return handle

@@ -14,6 +14,11 @@ x-runtime-environment: &runtime-environment
   JOB_BACKOFF_BASE_SECONDS: ${JOB_BACKOFF_BASE_SECONDS:-10}
   JOB_BACKOFF_MAX_SECONDS: ${JOB_BACKOFF_MAX_SECONDS:-3600}
   LLM_DAILY_COST_CAP_USD: ${LLM_DAILY_COST_CAP_USD:-1.00}
+  ARTIFACT_STORAGE_DIR: /srv/artifacts
+  RESUME_MAX_BYTES: ${RESUME_MAX_BYTES:-5242880}
+  RESUME_MAX_PAGES: ${RESUME_MAX_PAGES:-10}
+  PARSE_TIMEOUT_SECONDS: ${PARSE_TIMEOUT_SECONDS:-30}
+  EXTRACTED_TEXT_MAX_CHARS: ${EXTRACTED_TEXT_MAX_CHARS:-200000}
 
 x-api-environment: &api-environment
   <<: *runtime-environment
@@ -64,6 +69,7 @@ services:
     command: ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--reload", "--reload-dir", "/srv/backend/app"]
     volumes:
       - ../backend/app:/srv/backend/app:ro
+      - artifact-data:/srv/artifacts
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -83,6 +89,7 @@ services:
     command: ["python", "-m", "app.worker"]
     volumes:
       - ../backend/app:/srv/backend/app:ro
+      - artifact-data:/srv/artifacts
     stop_signal: SIGTERM
     depends_on:
       migrate:
@@ -106,4 +113,5 @@ services:
 
 volumes:
   postgres-data:
+  artifact-data:
   frontend-node-modules:

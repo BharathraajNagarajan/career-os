@@ -93,6 +93,11 @@ Settings come only from environment variables; the application never reads a `.e
 | `TEST_ADMIN_DATABASE_URL` | unset | Owner URL for database tests; unset skips tests marked `db` |
 | `REQUIRE_DB_TESTS` | unset | Set to `1` (CI does) to fail the test run instead of skipping database tests when `TEST_ADMIN_DATABASE_URL` is missing |
 | `LLM_DAILY_COST_CAP_USD` | `1.00` | Per-user daily model cost cap (spec 13.1); enforced from Task 5 |
+| `ARTIFACT_STORAGE_DIR` | `/srv/artifacts` | Directory of the filesystem artifact store (API and worker only; Compose mounts the `artifact-data` volume here). An S3-compatible adapter replaces it at deployment |
+| `RESUME_MAX_BYTES` | `5242880` | Largest accepted resume upload (5 MiB); larger uploads get 413 |
+| `RESUME_MAX_PAGES` | `10` | Largest accepted PDF page count; more pages fail parsing with `too_many_pages` |
+| `PARSE_TIMEOUT_SECONDS` | `30` | Hard limit for the resume parsing child process; exceeding it fails parsing with `parse_timeout` |
+| `EXTRACTED_TEXT_MAX_CHARS` | `200000` | Extracted resume text is truncated to this many characters |
 
 ## Database, migrations and database tests
 
@@ -115,6 +120,10 @@ Database tests create and drop their own `career_os_test_<random>` database. Use
 Google OpenID Connect sign-in (authorization code flow with PKCE, state and nonce), hashed server-side sessions with idle and absolute expiry, CSRF double-submit tokens on mutations, session revocation and account deletion. Only `openid email profile` is requested at sign-in. See [docs/architecture/auth.md](docs/architecture/auth.md) for the flow, cookie flags, deletion path and Google Cloud setup. Every new route needs an entry in the isolation harness (`backend/tests/db/test_isolation.py`).
 
 The API contract is [backend/openapi.json](backend/openapi.json); regenerate it with `cd backend && uv run python -m app.openapi_export openapi.json`, then the frontend types with `cd frontend && npm run generate:api`. CI fails if either is out of date.
+
+## Profile, resumes and lanes
+
+One profile per user (constraints, target roles, communication preferences), immutable resume uploads (PDF and DOCX, sniffed by content, size limited, deduplicated by SHA-256) with text and outline extraction in the worker and no model call, and resume lanes. Originals are stored under `ARTIFACT_STORAGE_DIR` and are never rewritten; the UI offers no way to edit a resume file. See [docs/architecture/artifacts.md](docs/architecture/artifacts.md).
 
 ## Logging
 

@@ -18,7 +18,9 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/app ./app
 
-RUN useradd --system --uid 10001 --no-create-home careeros
+RUN useradd --system --uid 10001 --no-create-home careeros \
+    && mkdir -p /srv/artifacts \
+    && chown careeros /srv/artifacts
 USER careeros
 
 EXPOSE 8000
