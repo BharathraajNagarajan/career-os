@@ -34,6 +34,7 @@ export function setUnauthorizedHandler(handler: () => void): void {
 
 interface ApiFetchOptions extends Omit<RequestInit, "body" | "credentials"> {
   json?: unknown;
+  form?: FormData;
   redirectOnUnauthorized?: boolean;
 }
 
@@ -47,7 +48,7 @@ async function errorCode(response: Response): Promise<string> {
 }
 
 export async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
-  const { json, redirectOnUnauthorized = true, ...init } = options;
+  const { json, form, redirectOnUnauthorized = true, ...init } = options;
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   if (!SAFE_METHODS.has(method)) {
@@ -64,7 +65,7 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
     method,
     headers,
     credentials: "same-origin",
-    body: json === undefined ? null : JSON.stringify(json),
+    body: form ?? (json === undefined ? null : JSON.stringify(json)),
   });
   if (response.status === 401 && redirectOnUnauthorized) {
     onUnauthorized();

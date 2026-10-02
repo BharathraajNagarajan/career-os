@@ -5,7 +5,10 @@ export function Layout() {
     <div className="shell">
       <header className="shell-header">
         <span className="wordmark">Career OS</span>{" "}
-        <Link to="/settings">Settings</Link>
+        <nav aria-label="Main" className="shell-nav">
+          <Link to="/profile">Profile</Link> <Link to="/resumes">Resumes</Link>{" "}
+          <Link to="/lanes">Lanes</Link> <Link to="/settings">Settings</Link>
+        </nav>
       </header>
       <main className="shell-main">
         <Outlet />
