@@ -9,6 +9,10 @@ dependencies = [
     "pydantic>=2.8",
     "pydantic-settings>=2.4",
     "structlog>=24.4",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+    "uuid6>=2024.7.10",
 ]
 
 [dependency-groups]
@@ -28,16 +32,21 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N", "C4", "PT"]
+ignore = ["N818"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "S311"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["app", "tests"]
+files = ["app", "tests", "alembic"]
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+markers = ["db: requires PostgreSQL via TEST_ADMIN_DATABASE_URL"]

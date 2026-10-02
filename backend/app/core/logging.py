@@ -6,7 +6,7 @@ from typing import Any, TextIO
 import structlog
 from structlog.types import EventDict, Processor, WrappedLogger
 
-from app.config import Settings
+from app.config import BaseAppSettings
 
 ALLOWED_FIELDS = frozenset(
     {
@@ -98,7 +98,7 @@ def _shared_processors() -> list[Processor]:
     ]
 
 
-def configure_logging(settings: Settings, stream: TextIO | None = None) -> None:
+def configure_logging(settings: BaseAppSettings, stream: TextIO | None = None) -> None:
     output = stream or sys.stdout
     renderer: Processor = (
         structlog.processors.JSONRenderer()
@@ -122,6 +122,7 @@ def configure_logging(settings: Settings, stream: TextIO | None = None) -> None:
         uvicorn_logger.handlers.clear()
         uvicorn_logger.propagate = True
     logging.getLogger("uvicorn.access").disabled = True
+    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 
     structlog.configure(
         processors=[

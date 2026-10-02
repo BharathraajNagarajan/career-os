@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.config import Environment, Settings
+from app.config import BootstrapSettings, Environment, MigrationSettings, Settings
 
 REQUIRED_ENV = "postgresql://career:secret-value@db:5432/career"
 
@@ -17,6 +17,11 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LLM_DAILY_COST_CAP_USD",
         "CORS_ALLOWED_ORIGINS",
         "WORKER_POLL_INTERVAL_SECONDS",
+        "MIGRATION_DATABASE_URL",
+        "APP_DB_PASSWORD",
+        "JOB_VISIBILITY_TIMEOUT_SECONDS",
+        "JOB_BACKOFF_BASE_SECONDS",
+        "JOB_BACKOFF_MAX_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -86,3 +91,40 @@ def test_worker_poll_interval_must_be_positive(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_runtime_settings_do_not_require_migration_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", REQUIRED_ENV)
+
+    settings = Settings()
+
+    assert not hasattr(settings, "migration_database_url")
+    assert not hasattr(settings, "app_db_password")
+    assert settings.job_backoff_base_seconds < settings.job_backoff_max_seconds
+
+
+def test_migration_settings_require_their_own_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", REQUIRED_ENV)
+
+    with pytest.raises(ValidationError):
+        MigrationSettings()
+
+
+def test_bootstrap_settings_hide_the_app_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", REQUIRED_ENV)
+    monkeypatch.setenv("APP_DB_PASSWORD", "app-password-value")
+
+    settings = BootstrapSettings()
+
+    assert "app-password-value" not in repr(settings)
+    assert "secret-value" not in repr(settings)
+
+
+def test_bootstrap_settings_reject_short_app_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIGRATION_DATABASE_URL", REQUIRED_ENV)
+    monkeypatch.setenv("APP_DB_PASSWORD", "short")
+
+    with pytest.raises(ValidationError):
+        BootstrapSettings()

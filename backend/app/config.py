@@ -16,20 +16,34 @@ class Environment(StrEnum):
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 
 
-class Settings(BaseSettings):
+class BaseAppSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", frozen=True, case_sensitive=False)
 
     environment: Environment = Environment.LOCAL
     log_level: LogLevel = "INFO"
     log_json: bool = True
-    database_url: SecretStr
-    cors_allowed_origins: list[str] = Field(default_factory=list)
-    worker_poll_interval_seconds: float = Field(default=5.0, gt=0)
-    llm_daily_cost_cap_usd: Decimal = Field(default=Decimal("1.00"), ge=0, decimal_places=2)
 
     @property
     def is_production(self) -> bool:
         return self.environment is Environment.PRODUCTION
+
+
+class Settings(BaseAppSettings):
+    database_url: SecretStr
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+    worker_poll_interval_seconds: float = Field(default=5.0, gt=0)
+    job_visibility_timeout_seconds: float = Field(default=900.0, gt=0)
+    job_backoff_base_seconds: float = Field(default=10.0, gt=0)
+    job_backoff_max_seconds: float = Field(default=3600.0, gt=0)
+    llm_daily_cost_cap_usd: Decimal = Field(default=Decimal("1.00"), ge=0, decimal_places=2)
+
+
+class MigrationSettings(BaseAppSettings):
+    migration_database_url: SecretStr
+
+
+class BootstrapSettings(MigrationSettings):
+    app_db_password: SecretStr = Field(min_length=12)
 
 
 @lru_cache
