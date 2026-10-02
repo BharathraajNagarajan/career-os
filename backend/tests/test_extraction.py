@@ -143,7 +143,7 @@ def test_heading_heuristics(line: str, expected: bool) -> None:
 
 
 def test_outline_ranges_cover_every_line_after_the_first_heading() -> None:
-    outline = build_outline("Intro line\nSKILLS\nPython\nSQL\nPROJECTS\nOne project\n")
+    outline = build_outline("Intro line\nSKILLS\nPython\nPostgres\nPROJECTS\nOne project\n")
 
     assert [(s.heading, s.start_line, s.end_line) for s in outline.sections] == [
         ("SKILLS", 2, 4),
