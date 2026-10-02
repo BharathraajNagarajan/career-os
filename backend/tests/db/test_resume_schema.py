@@ -93,7 +93,7 @@ def test_artifact_extraction_columns_can_be_updated(session: Session) -> None:
     artifact.extraction_error_code = None
     session.commit()
 
-    stored = session.execute(text("SELECT extracted_text FROM artifacts")).scalar_one()
+    stored: str = session.execute(text("SELECT extracted_text FROM artifacts")).scalar_one()
     assert stored == "synthetic text"
 
 
@@ -216,7 +216,7 @@ def test_account_deletion_cascades_through_the_circular_foreign_keys(
 
     assert deleted.scalar_one() is True
     for table in ("users", "profiles", "artifacts", "resumes", "resume_lanes"):
-        remaining = owner_session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()  # noqa: S608
+        remaining: int = owner_session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()  # noqa: S608
         assert remaining == 0, table
         owner_session.rollback()
 

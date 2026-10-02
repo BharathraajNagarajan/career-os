@@ -161,7 +161,7 @@ def test_rerunning_a_succeeded_artifact_does_nothing(
     resume = upload(persona, synthetic_pdf("idempotent")).json()
     extractor = RecordingExtractor(success_result())
     runner_with(app_sessions, db_settings, extractor).run_once()
-    artifact_id = owner_session.execute(text("SELECT id FROM artifacts")).scalar_one()
+    artifact_id: uuid.UUID = owner_session.execute(text("SELECT id FROM artifacts")).scalar_one()
     handler = make_parse_resume_handler(
         FilesystemStorage(db_settings.artifact_storage_dir), db_settings, extractor
     )
@@ -188,7 +188,7 @@ def test_a_job_cannot_reach_another_users_artifact(
     other = make_persona(app, idp, "b")
     victim = upload(persona, synthetic_pdf("victim")).json()
     own = upload(other, synthetic_pdf("own")).json()
-    artifact_id = owner_session.execute(
+    artifact_id: uuid.UUID = owner_session.execute(
         text("SELECT artifact_id FROM resumes WHERE id = :id"), {"id": victim["id"]}
     ).scalar_one()
     extractor = RecordingExtractor(success_result())

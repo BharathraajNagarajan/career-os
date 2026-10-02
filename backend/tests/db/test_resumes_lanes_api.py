@@ -62,7 +62,7 @@ def test_label_and_lane_are_the_only_editable_fields(persona: Persona) -> None:
 
     assert renamed.json()["label"] == "Main"
     assert moved.json()["lane_id"] == lane["id"]
-    for forbidden in (
+    forbidden_bodies: list[dict[str, Any]] = [
         {"artifact_id": created["id"]},
         {"storage_key": "x"},
         {"sha256": "x"},
@@ -70,7 +70,8 @@ def test_label_and_lane_are_the_only_editable_fields(persona: Persona) -> None:
         {"original_filename": "x.pdf"},
         {"extracted_text": "x"},
         {"parsed_outline": {}},
-    ):
+    ]
+    for forbidden in forbidden_bodies:
         response = persona.request("PATCH", f"/api/v1/resumes/{created['id']}", json=forbidden)
         assert response.status_code == 422, forbidden
 
