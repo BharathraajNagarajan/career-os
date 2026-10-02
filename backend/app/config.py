@@ -38,6 +38,20 @@ class Settings(BaseAppSettings):
     llm_daily_cost_cap_usd: Decimal = Field(default=Decimal("1.00"), ge=0, decimal_places=2)
 
 
+class AuthSettings(BaseAppSettings):
+    session_secret: SecretStr = Field(min_length=32)
+    session_idle_timeout_hours: float = Field(default=168, gt=0)
+    session_absolute_timeout_hours: float = Field(default=720, gt=0)
+    session_cookie_secure: bool = True
+    app_base_url: str = "http://localhost:5173"
+    google_client_id: str = ""
+    google_client_secret: SecretStr = SecretStr("")
+
+    @property
+    def google_redirect_uri(self) -> str:
+        return f"{self.app_base_url.rstrip('/')}/api/v1/auth/google/callback"
+
+
 class MigrationSettings(BaseAppSettings):
     migration_database_url: SecretStr
 
@@ -49,3 +63,8 @@ class BootstrapSettings(MigrationSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+@lru_cache
+def get_auth_settings() -> AuthSettings:
+    return AuthSettings()
