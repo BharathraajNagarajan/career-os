@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
@@ -8,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     LargeBinary,
+    Numeric,
     Text,
     UniqueConstraint,
     func,
@@ -20,6 +22,7 @@ from app.db.base import (
     Base,
     HasCreatedAt,
     HasId,
+    StateVersioned,
     TextEnum,
     UserOwned,
     enum_check,
@@ -97,6 +100,57 @@ class ResumeStatus(StrEnum):
 class LaneStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+class LlmPurpose(StrEnum):
+    EXTRACT_RESUME = "extract_resume"
+    EXTRACT_JD = "extract_jd"
+    CLASSIFY_EMAIL = "classify_email"
+    EVALUATE = "evaluate"
+    CHAT = "chat"
+    PROPOSE_SKILL_EVIDENCE = "propose_skill_evidence"
+    OUTREACH_RECOMMENDATION = "outreach_recommendation"
+    OUTREACH_DRAFT = "outreach_draft"
+
+
+class LlmTier(StrEnum):
+    FAST = "fast"
+    REASONING = "reasoning"
+
+
+class LlmProviderName(StrEnum):
+    FAKE = "fake"
+    ANTHROPIC = "anthropic"
+
+
+class LlmRunStatus(StrEnum):
+    RESERVED = "reserved"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ReviewSource(StrEnum):
+    GMAIL = "gmail"
+    EXTRACTION = "extraction"
+    CHAT = "chat"
+
+
+class ProposalType(StrEnum):
+    CLAIM = "claim"
+    SKILL = "skill"
+    SKILL_EVIDENCE = "skill_evidence"
+    CREATE_APPLICATION = "create_application"
+    APPLICATION_EVENT = "application_event"
+    INTERACTION = "interaction"
+    CONTACT_LINK = "contact_link"
+    CONTACT_EMAIL = "contact_email"
+
+
+class ReviewStatus(StrEnum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 class User(HasId, HasCreatedAt, Base):
@@ -282,6 +336,90 @@ class ResumeLane(UserOwned, HasCreatedAt, Base):
     status: Mapped[LaneStatus] = mapped_column(
         TextEnum(LaneStatus), server_default=LaneStatus.ACTIVE.value
     )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class LlmRun(UserOwned, Base):
+    __tablename__ = "llm_runs"
+    __table_args__ = owned_table_args(
+        enum_check("purpose", LlmPurpose),
+        enum_check("tier", LlmTier),
+        enum_check("provider", LlmProviderName),
+        enum_check("status", LlmRunStatus),
+        owned_fk("repair_of_run_id", "llm_runs"),
+        CheckConstraint("attempt IN (1, 2)", name="attempt"),
+        CheckConstraint("(attempt = 1) = (repair_of_run_id IS NULL)", name="repair_link"),
+        CheckConstraint("max_output_tokens > 0", name="max_output_tokens_positive"),
+        CheckConstraint("reserved_cost_usd >= 0", name="reserved_cost_nonnegative"),
+        CheckConstraint("cost_usd IS NULL OR cost_usd >= 0", name="cost_nonnegative"),
+        CheckConstraint(
+            "(status = 'reserved') = (cost_usd IS NULL) AND "
+            "(status = 'reserved') = (settled_at IS NULL)",
+            name="settlement_consistent",
+        ),
+        CheckConstraint("jsonb_typeof(context_manifest) = 'object'", name="manifest_object"),
+        Index("ix_llm_runs_user_id_created_at", "user_id", "created_at"),
+    )
+
+    purpose: Mapped[LlmPurpose] = mapped_column(TextEnum(LlmPurpose))
+    prompt_id: Mapped[str] = mapped_column(Text)
+    prompt_version: Mapped[int]
+    provider: Mapped[LlmProviderName] = mapped_column(TextEnum(LlmProviderName))
+    model: Mapped[str] = mapped_column(Text)
+    tier: Mapped[LlmTier] = mapped_column(TextEnum(LlmTier))
+    max_output_tokens: Mapped[int]
+    attempt: Mapped[int] = mapped_column(server_default="1")
+    repair_of_run_id: Mapped[uuid.UUID | None]
+    status: Mapped[LlmRunStatus] = mapped_column(TextEnum(LlmRunStatus))
+    error_code: Mapped[str | None] = mapped_column(Text)
+    input_tokens: Mapped[int | None]
+    output_tokens: Mapped[int | None]
+    latency_ms: Mapped[int | None]
+    reserved_cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6))
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
+    context_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime]
+    settled_at: Mapped[datetime | None]
+
+
+class ReviewItem(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "review_items"
+    __table_args__ = owned_table_args(
+        enum_check("source", ReviewSource),
+        enum_check("proposal_type", ProposalType),
+        enum_check("status", ReviewStatus),
+        owned_fk("llm_run_id", "llm_runs"),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)", name="confidence_range"
+        ),
+        CheckConstraint(
+            "jsonb_typeof(proposed_payload) = 'object'", name="proposed_payload_object"
+        ),
+        CheckConstraint(
+            "decided_payload IS NULL OR jsonb_typeof(decided_payload) = 'object'",
+            name="decided_payload_object",
+        ),
+        CheckConstraint("(status = 'pending') = (decided_at IS NULL)", name="decision_consistent"),
+        CheckConstraint(
+            "decided_payload IS NULL OR status = 'confirmed'", name="decided_payload_confirmed"
+        ),
+        Index("ix_review_items_user_id_status_created_at", "user_id", "status", "created_at"),
+    )
+
+    source: Mapped[ReviewSource] = mapped_column(TextEnum(ReviewSource))
+    proposal_type: Mapped[ProposalType] = mapped_column(TextEnum(ProposalType))
+    proposed_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    rationale: Mapped[str | None] = mapped_column(Text)
+    evidence_ref_id: Mapped[uuid.UUID | None]
+    status: Mapped[ReviewStatus] = mapped_column(
+        TextEnum(ReviewStatus), server_default=ReviewStatus.PENDING.value
+    )
+    decided_at: Mapped[datetime | None]
+    llm_run_id: Mapped[uuid.UUID | None]
+    decided_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    decision_note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 

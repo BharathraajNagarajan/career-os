@@ -16,8 +16,11 @@ from app.core.errors import install_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.llm.router import router as llm_router
 from app.profile.router import router as profile_router
 from app.resumes.router import router as resumes_router
+from app.review.handlers import ReviewHandlerRegistry
+from app.review.router import router as review_router
 
 
 def create_app(
@@ -26,6 +29,7 @@ def create_app(
     session_factory: sessionmaker[Session] | None = None,
     identity_provider: IdentityProvider | None = None,
     storage: StorageAdapter | None = None,
+    review_registry: ReviewHandlerRegistry | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings)
@@ -60,12 +64,15 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.identity_provider = identity_provider
     app.state.settings = settings
+    app.state.review_registry = review_registry or ReviewHandlerRegistry()
     app.state.storage = storage or FilesystemStorage(settings.artifact_storage_dir)
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(profile_router)
     app.include_router(resumes_router)
+    app.include_router(llm_router)
+    app.include_router(review_router)
 
     get_logger(__name__).info(
         "api_configured", environment=settings.environment.value, version=__version__

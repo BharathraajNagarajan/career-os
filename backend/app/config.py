@@ -2,9 +2,9 @@ from decimal import Decimal
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,22 @@ class BaseAppSettings(BaseSettings):
         return self.environment is Environment.PRODUCTION
 
 
+class ModelPrice(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    input_usd_per_mtok: Decimal = Field(ge=0)
+    output_usd_per_mtok: Decimal = Field(ge=0)
+
+
+FAKE_FAST_MODEL = "fake-fast"
+FAKE_REASONING_MODEL = "fake-reasoning"
+
+
+def _fake_prices() -> dict[str, ModelPrice]:
+    price = ModelPrice(input_usd_per_mtok=Decimal("1"), output_usd_per_mtok=Decimal("5"))
+    return {FAKE_FAST_MODEL: price, FAKE_REASONING_MODEL: price}
+
+
 class Settings(BaseAppSettings):
     database_url: SecretStr
     cors_allowed_origins: list[str] = Field(default_factory=list)
@@ -37,11 +53,29 @@ class Settings(BaseAppSettings):
     job_backoff_base_seconds: float = Field(default=10.0, gt=0)
     job_backoff_max_seconds: float = Field(default=3600.0, gt=0)
     llm_daily_cost_cap_usd: Decimal = Field(default=Decimal("1.00"), ge=0, decimal_places=2)
+    llm_provider: Literal["fake", "anthropic"] = "fake"
+    anthropic_api_key: SecretStr | None = None
+    llm_model_fast: str = FAKE_FAST_MODEL
+    llm_model_reasoning: str = FAKE_REASONING_MODEL
+    llm_model_prices: dict[str, ModelPrice] = Field(default_factory=_fake_prices)
+    llm_request_timeout_seconds: float = Field(default=60.0, gt=0)
+    llm_default_max_output_tokens: int = Field(default=1024, gt=0)
     artifact_storage_dir: Path = Path("/srv/artifacts")
     resume_max_bytes: int = Field(default=5 * 1024 * 1024, gt=0)
     resume_max_pages: int = Field(default=10, gt=0)
     parse_timeout_seconds: float = Field(default=30.0, gt=0)
     extracted_text_max_chars: int = Field(default=200_000, gt=0)
+
+    @model_validator(mode="after")
+    def _check_llm_configuration(self) -> Self:
+        for tier_model in (self.llm_model_fast, self.llm_model_reasoning):
+            if tier_model not in self.llm_model_prices:
+                raise ValueError(f"LLM_MODEL_PRICES has no entry for model {tier_model!r}")
+        if self.llm_provider == "anthropic" and not (
+            self.anthropic_api_key and self.anthropic_api_key.get_secret_value()
+        ):
+            raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic")
+        return self
 
 
 class AuthSettings(BaseAppSettings):

@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.db.tenancy import NotFound
+from app.llm.errors import LlmBudgetExhausted
 
 
 class ErrorBody(BaseModel):
@@ -50,3 +51,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(NotFound)
     def handle_not_found(_: Request, __: NotFound) -> JSONResponse:
         return error_response(404, "not_found")
+
+    @app.exception_handler(LlmBudgetExhausted)
+    def handle_budget_exhausted(_: Request, exc: LlmBudgetExhausted) -> JSONResponse:
+        return error_response(429, exc.code)
