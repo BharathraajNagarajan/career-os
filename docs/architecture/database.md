@@ -16,8 +16,12 @@ PostgreSQL 16 is the system of record and the job queue (ADR-002, ADR-006). Acce
 | `sessions` | SELECT, INSERT, UPDATE, DELETE | Hashed session tokens; sign-out and revocation delete rows |
 | `domain_events` | SELECT, INSERT | INV-04: append-only is enforced by the database, not by convention |
 | `jobs` | SELECT, INSERT, UPDATE, DELETE | Queue bookkeeping |
+| `profiles` | SELECT, INSERT, UPDATE | One row per user, created lazily; no DELETE (removed with the account) |
+| `artifacts` | SELECT, INSERT, and UPDATE on `extracted_text`, `extraction_status`, `extraction_error_code` only | INV-05: the stored file's identity (`storage_key`, `sha256`, `byte_size`, `mime_type`, `original_filename`) cannot change by privilege. No DELETE |
+| `resumes` | SELECT, INSERT, UPDATE | Archive only; no DELETE |
+| `resume_lanes` | SELECT, INSERT, UPDATE | Archive only; no DELETE |
 
-`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities` and `sessions`. See [auth.md](auth.md).
+`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes` and `resume_lanes`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
 
 The bootstrap command creates `career_os_app`, or resets its password if it exists, with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`. It is idempotent. Table grants live in the migration that creates each table, so they are versioned and reviewed with the schema. Roles are cluster-wide: bootstrapping any database on the same server, including a test database, sets the same role's password, so every environment on one server must share `APP_DB_PASSWORD`. The password is interpolated into connection URLs and must be URL-safe.
 
@@ -37,6 +41,10 @@ The API and worker never receive owner credentials: Compose passes them an expli
 | Optimistic concurrency | `StateVersioned` mixin (`state_version`, default 1) and `update_versioned()`, which updates `WHERE id AND user_id AND state_version = expected`, bumps the version and raises `ConcurrencyConflict` on zero rows |
 
 Event payload evolution: `PayloadRegistry.register(event_type, Model, version=N, upcasters={1: f, ...})` requires an upcaster for every older version; `load()` upcasts stored JSON step by step to the current model. Stored events are never rewritten.
+
+## Circular foreign keys (migration 0003)
+
+`resumes.lane_id` references `resume_lanes`, and `resume_lanes.default_resume_id` references `resumes`; both are composite `(user_id, id)` keys, so neither can point at another user's row. Neither table can be created with both constraints inline, so the migration creates `resume_lanes` and `resumes` first and adds `fk_resume_lanes_user_id_default_resume_id_resumes` afterwards with an `ALTER`; the downgrade drops that constraint before the tables. The model marks it `use_alter=True`. All three references between these tables and `artifacts` use `NO ACTION` (see [artifacts.md](artifacts.md) for why, and for what was and was not observed about `RESTRICT`).
 
 ## Tenancy and INV-18
 

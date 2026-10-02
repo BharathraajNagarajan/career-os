@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -7,6 +9,7 @@ from app.db.tenancy import NotFound
 
 class ErrorBody(BaseModel):
     code: str
+    resume_id: uuid.UUID | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -20,21 +23,26 @@ class ApiError(Exception):
         code: str,
         *,
         delete_cookies: tuple[tuple[str, str], ...] = (),
+        resume_id: uuid.UUID | None = None,
     ) -> None:
         super().__init__(code)
         self.status_code = status_code
         self.code = code
         self.delete_cookies = delete_cookies
+        self.resume_id = resume_id
 
 
-def error_response(status_code: int, code: str) -> JSONResponse:
-    return JSONResponse(ErrorResponse(error=ErrorBody(code=code)).model_dump(), status_code)
+def error_response(
+    status_code: int, code: str, *, resume_id: uuid.UUID | None = None
+) -> JSONResponse:
+    body = ErrorResponse(error=ErrorBody(code=code, resume_id=resume_id))
+    return JSONResponse(body.model_dump(mode="json", exclude_none=True), status_code)
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
-        response = error_response(exc.status_code, exc.code)
+        response = error_response(exc.status_code, exc.code, resume_id=exc.resume_id)
         for name, path in exc.delete_cookies:
             response.delete_cookie(name, path=path)
         return response

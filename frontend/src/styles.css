@@ -26,6 +26,10 @@ body {
   font-weight: 600;
 }
 
+.shell-nav {
+  display: inline;
+}
+
 .shell-main {
   max-width: 40rem;
 }

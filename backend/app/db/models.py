@@ -3,8 +3,17 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import (
@@ -52,6 +61,42 @@ class JobStatus(StrEnum):
 
 
 ACTIVE_JOB_STATUSES = (JobStatus.QUEUED, JobStatus.RUNNING)
+
+
+class RelocationPreference(StrEnum):
+    OPEN = "open"
+    NOT_OPEN = "not_open"
+    UNSPECIFIED = "unspecified"
+
+
+class RemotePreference(StrEnum):
+    REMOTE_ONLY = "remote_only"
+    HYBRID = "hybrid"
+    ONSITE = "onsite"
+    NO_PREFERENCE = "no_preference"
+
+
+class ArtifactKind(StrEnum):
+    RESUME_FILE = "resume_file"
+    JD_SNAPSHOT = "jd_snapshot"
+    EMAIL_EXCERPT = "email_excerpt"
+    REFERENCE = "reference"
+
+
+class ExtractionStatus(StrEnum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class ResumeStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class LaneStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
 
 
 class User(HasId, HasCreatedAt, Base):
@@ -144,6 +189,100 @@ class Job(HasId, HasCreatedAt, Base):
     correlation_id: Mapped[uuid.UUID | None]
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
     finished_at: Mapped[datetime | None]
+
+
+class Profile(UserOwned, Base):
+    __tablename__ = "profiles"
+    __table_args__ = owned_table_args(
+        enum_check("relocation_preference", RelocationPreference),
+        enum_check("remote_preference", RemotePreference),
+        UniqueConstraint("user_id"),
+    )
+
+    headline: Mapped[str | None] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(Text)
+    current_location: Mapped[str | None] = mapped_column(Text)
+    relocation_preference: Mapped[RelocationPreference] = mapped_column(
+        TextEnum(RelocationPreference), server_default=RelocationPreference.UNSPECIFIED.value
+    )
+    remote_preference: Mapped[RemotePreference] = mapped_column(
+        TextEnum(RemotePreference), server_default=RemotePreference.NO_PREFERENCE.value
+    )
+    work_authorization: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    constraints_updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    target_roles: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    communication_preferences: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Artifact(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "artifacts"
+    __table_args__ = owned_table_args(
+        enum_check("kind", ArtifactKind),
+        enum_check("extraction_status", ExtractionStatus),
+        CheckConstraint("octet_length(sha256) = 32", name="sha256_length"),
+        CheckConstraint("byte_size >= 0", name="byte_size_nonnegative"),
+        UniqueConstraint("user_id", "sha256", "kind"),
+    )
+
+    kind: Mapped[ArtifactKind] = mapped_column(TextEnum(ArtifactKind))
+    storage_key: Mapped[str] = mapped_column(Text)
+    sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    mime_type: Mapped[str] = mapped_column(Text)
+    byte_size: Mapped[int]
+    original_filename: Mapped[str] = mapped_column(Text)
+    extracted_text: Mapped[str | None] = mapped_column(Text, deferred=True)
+    extraction_status: Mapped[ExtractionStatus] = mapped_column(
+        TextEnum(ExtractionStatus), server_default=ExtractionStatus.PENDING.value
+    )
+    extraction_error_code: Mapped[str | None] = mapped_column(Text)
+
+
+class Resume(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "resumes"
+    __table_args__ = owned_table_args(
+        enum_check("status", ResumeStatus),
+        owned_fk("artifact_id", "artifacts"),
+        owned_fk("lane_id", "resume_lanes"),
+        UniqueConstraint("artifact_id"),
+    )
+
+    artifact_id: Mapped[uuid.UUID]
+    label: Mapped[str] = mapped_column(Text)
+    lane_id: Mapped[uuid.UUID | None]
+    parsed_outline: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[ResumeStatus] = mapped_column(
+        TextEnum(ResumeStatus), server_default=ResumeStatus.ACTIVE.value
+    )
+    archived_at: Mapped[datetime | None]
+
+
+class ResumeLane(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "resume_lanes"
+    __table_args__ = owned_table_args(
+        enum_check("status", LaneStatus),
+        owned_fk("default_resume_id", "resumes", use_alter=True),
+        Index(
+            "uq_resume_lanes_active_name",
+            "user_id",
+            func.lower(text("name")),
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, server_default="")
+    emphasis_notes: Mapped[str] = mapped_column(Text, server_default="")
+    target_role_labels: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), server_default=text("'{}'::text[]")
+    )
+    default_resume_id: Mapped[uuid.UUID | None]
+    status: Mapped[LaneStatus] = mapped_column(
+        TextEnum(LaneStatus), server_default=LaneStatus.ACTIVE.value
+    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
 metadata = Base.metadata

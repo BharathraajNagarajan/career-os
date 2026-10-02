@@ -90,7 +90,7 @@ SameSite=Lax is the first layer. The second is a double-submit token (spec T7): 
 `POST /api/v1/account/deletion` with `{"confirm": "DELETE MY ACCOUNT"}`, authenticated and CSRF-protected.
 
 1. One transaction: set `users.status = 'deletion_requested'`, delete all of the user's sessions, enqueue a `delete_account` job. The response is 202 and clears the cookies. The job is a system job (`user_id` NULL, payload `{"user_id": ...}`, `unique_key = delete_account:<user_id>`); a user-owned job would be removed by the very cascade it triggers.
-2. The worker re-resolves the user (INV-18) and requires `deletion_requested`. It runs the registered deletion hooks (`app/auth/deletion.py`; Task 4 registers artifact and object deletion here), then calls `delete_user_account(user_id)`. It does nothing if the user is already gone, so retries are safe.
+2. The worker re-resolves the user (INV-18) and requires `deletion_requested`. It runs the registered deletion hooks (`app/auth/deletion.py`; the `artifact_storage` hook from Task 4 deletes the user's object-storage prefix here, see [artifacts.md](artifacts.md)), then calls `delete_user_account(user_id)`. It does nothing if the user is already gone, so retries are safe.
 3. `ON DELETE CASCADE` removes the user's `domain_events`, `jobs`, `auth_identities` and `sessions`.
 
 A user in `deletion_requested` cannot sign in and none of their sessions authenticates.

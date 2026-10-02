@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -12,10 +13,16 @@ from starlette.routing import Route
 
 from tests.auth.fake_idp import FakeIdentityProvider
 from tests.db.auth_helpers import Persona, make_persona, new_client
+from tests.db.resume_helpers import create_lane, upload
+from tests.synthetic import synthetic_pdf
 
 pytestmark = pytest.mark.db
 
 Route_ = tuple[str, str]
+
+A_HEADLINE = "Persona A headline"
+A_LABEL = "Persona A resume"
+A_LANE = "Persona A lane"
 
 PUBLIC: set[Route_] = {
     ("GET", "/healthz"),
@@ -32,6 +39,7 @@ class Personas:
     a: Persona
     b: Persona
     owner: Session
+    a_ids: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -58,6 +66,34 @@ def assert_a_has_session_and_active_status(personas: Personas) -> None:
     assert_a_still_signed_in(personas)
 
 
+def assert_a_profile_unchanged(personas: Personas) -> None:
+    body = personas.a.client.get("/api/v1/profile").json()
+    assert body["headline"] == A_HEADLINE
+
+
+def a_resume(personas: Personas) -> dict[str, Any]:
+    resumes = personas.a.client.get("/api/v1/resumes").json()
+    assert len(resumes) == 1
+    body: dict[str, Any] = resumes[0]
+    return body
+
+
+def assert_a_resume_untouched(personas: Personas) -> None:
+    resume = a_resume(personas)
+    assert resume["id"] == personas.a_ids["resume"]
+    assert resume["label"] == A_LABEL
+    assert resume["status"] == "active"
+    assert resume["lane_id"] == personas.a_ids["lane"]
+
+
+def assert_a_lane_untouched(personas: Personas) -> None:
+    lanes = personas.a.client.get("/api/v1/lanes").json()
+    assert [(lane["id"], lane["name"], lane["status"]) for lane in lanes] == [
+        (personas.a_ids["lane"], A_LANE, "active")
+    ]
+    assert_a_resume_untouched(personas)
+
+
 PROTECTED: dict[Route_, IsolationCase] = {
     ("GET", "/api/v1/auth/me"): IsolationCase(
         "/api/v1/auth/me",
@@ -76,6 +112,74 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=lambda personas: {"session_id": str(personas.a.session_id)},
         a_untouched=assert_a_still_signed_in,
     ),
+    ("GET", "/api/v1/profile"): IsolationCase(
+        "/api/v1/profile", a_untouched=assert_a_profile_unchanged
+    ),
+    ("PUT", "/api/v1/profile"): IsolationCase(
+        "/api/v1/profile",
+        body={"headline": "Overwritten by persona B"},
+        a_untouched=assert_a_profile_unchanged,
+    ),
+    ("POST", "/api/v1/resumes"): IsolationCase(
+        "/api/v1/resumes", a_untouched=assert_a_resume_untouched
+    ),
+    ("GET", "/api/v1/resumes"): IsolationCase(
+        "/api/v1/resumes",
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["resume"]},
+    ),
+    ("GET", "/api/v1/resumes/{resume_id}"): IsolationCase(
+        "/api/v1/resumes/{resume_id}",
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_untouched,
+    ),
+    ("PATCH", "/api/v1/resumes/{resume_id}"): IsolationCase(
+        "/api/v1/resumes/{resume_id}",
+        body={"label": "hijacked", "lane_id": None},
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_untouched,
+    ),
+    ("POST", "/api/v1/resumes/{resume_id}/archive"): IsolationCase(
+        "/api/v1/resumes/{resume_id}/archive",
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_untouched,
+    ),
+    ("POST", "/api/v1/resumes/{resume_id}/unarchive"): IsolationCase(
+        "/api/v1/resumes/{resume_id}/unarchive",
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_untouched,
+    ),
+    ("GET", "/api/v1/resumes/{resume_id}/file"): IsolationCase(
+        "/api/v1/resumes/{resume_id}/file",
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_untouched,
+    ),
+    ("GET", "/api/v1/lanes"): IsolationCase(
+        "/api/v1/lanes",
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["lane"]},
+    ),
+    ("POST", "/api/v1/lanes"): IsolationCase(
+        "/api/v1/lanes",
+        body={"name": "Persona B lane"},
+        a_untouched=assert_a_lane_untouched,
+    ),
+    ("PATCH", "/api/v1/lanes/{lane_id}"): IsolationCase(
+        "/api/v1/lanes/{lane_id}",
+        body={"name": "hijacked", "default_resume_id": None},
+        foreign_params=lambda personas: {"lane_id": personas.a_ids["lane"]},
+        a_untouched=assert_a_lane_untouched,
+    ),
+    ("POST", "/api/v1/lanes/{lane_id}/archive"): IsolationCase(
+        "/api/v1/lanes/{lane_id}/archive",
+        foreign_params=lambda personas: {"lane_id": personas.a_ids["lane"]},
+        a_untouched=assert_a_lane_untouched,
+    ),
+    ("POST", "/api/v1/lanes/{lane_id}/unarchive"): IsolationCase(
+        "/api/v1/lanes/{lane_id}/unarchive",
+        foreign_params=lambda personas: {"lane_id": personas.a_ids["lane"]},
+        a_untouched=assert_a_lane_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
@@ -84,9 +188,22 @@ PROTECTED: dict[Route_, IsolationCase] = {
 }
 
 
+def seed(persona: Persona, *, label: str, headline: str, lane: str) -> dict[str, str]:
+    lane_row = create_lane(persona, lane)
+    resume = upload(
+        persona, synthetic_pdf(f"isolation-{persona.label}"), lane_id=lane_row["id"], label=label
+    ).json()
+    persona.request("PUT", "/api/v1/profile", json={"headline": headline})
+    return {"lane": lane_row["id"], "resume": resume["id"]}
+
+
 @pytest.fixture
 def personas(app: FastAPI, idp: FakeIdentityProvider, owner_session: Session) -> Personas:
-    return Personas(make_persona(app, idp, "a"), make_persona(app, idp, "b"), owner_session)
+    a = make_persona(app, idp, "a")
+    b = make_persona(app, idp, "b")
+    a_ids = seed(a, label=A_LABEL, headline=A_HEADLINE, lane=A_LANE)
+    seed(b, label="Persona B resume", headline="Persona B headline", lane="Persona B seeded lane")
+    return Personas(a, b, owner_session, a_ids)
 
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
@@ -120,7 +237,7 @@ def render(case: IsolationCase, params: dict[str, str]) -> str:
 
 
 def sample_params(case: IsolationCase) -> dict[str, str]:
-    return {"session_id": str(uuid.uuid4())} if "{session_id}" in case.path else {}
+    return {name: str(uuid.uuid4()) for name in re.findall(r"{(\w+)}", case.path)}
 
 
 def test_every_registered_route_is_classified(app: FastAPI) -> None:

@@ -86,13 +86,14 @@ def owner_session(database: Database) -> Iterator[Session]:
 
 
 @pytest.fixture
-def db_settings(database: Database) -> Settings:
+def db_settings(database: Database, tmp_path: Path) -> Settings:
     return Settings(
         environment=Environment.TEST,
         database_url=secret(database.app_url),
         job_backoff_base_seconds=30,
         job_backoff_max_seconds=600,
         job_visibility_timeout_seconds=60,
+        artifact_storage_dir=tmp_path / "artifacts",
     )
 
 

@@ -123,6 +123,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lanes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Lanes */
+        get: operations["list_lanes_api_v1_lanes_get"];
+        put?: never;
+        /** Create Lane */
+        post: operations["create_lane_api_v1_lanes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lanes/{lane_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Lane */
+        patch: operations["patch_lane_api_v1_lanes__lane_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/lanes/{lane_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Lane */
+        post: operations["archive_lane_api_v1_lanes__lane_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lanes/{lane_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive Lane */
+        post: operations["unarchive_lane_api_v1_lanes__lane_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Profile */
+        get: operations["get_profile_api_v1_profile_get"];
+        /** Put Profile */
+        put: operations["put_profile_api_v1_profile_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Resumes */
+        get: operations["list_resumes_api_v1_resumes_get"];
+        put?: never;
+        /** Upload Resume */
+        post: operations["upload_resume_api_v1_resumes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resumes/{resume_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Resume */
+        get: operations["get_resume_api_v1_resumes__resume_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Resume */
+        patch: operations["patch_resume_api_v1_resumes__resume_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/resumes/{resume_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Resume */
+        post: operations["archive_resume_api_v1_resumes__resume_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resumes/{resume_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Resume File */
+        get: operations["download_resume_file_api_v1_resumes__resume_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resumes/{resume_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive Resume */
+        post: operations["unarchive_resume_api_v1_resumes__resume_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -144,6 +318,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CommunicationPreferences */
+        CommunicationPreferences: {
+            /** Avoid */
+            avoid?: string[];
+            /**
+             * Length
+             * @default
+             */
+            length: string;
+            /**
+             * Sign Off
+             * @default
+             */
+            sign_off: string;
+            /**
+             * Tone
+             * @default
+             */
+            tone: string;
+        };
         /** DeletionRequest */
         DeletionRequest: {
             /**
@@ -156,11 +350,18 @@ export interface components {
         ErrorBody: {
             /** Code */
             code: string;
+            /** Resume Id */
+            resume_id?: string | null;
         };
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorBody"];
         };
+        /**
+         * ExtractionStatus
+         * @enum {string}
+         */
+        ExtractionStatus: "pending" | "succeeded" | "failed";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -176,6 +377,70 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** LaneCreate */
+        LaneCreate: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Emphasis Notes
+             * @default
+             */
+            emphasis_notes: string;
+            /** Name */
+            name: string;
+            /** Target Role Labels */
+            target_role_labels?: string[];
+        };
+        /** LanePatch */
+        LanePatch: {
+            /** Default Resume Id */
+            default_resume_id?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Emphasis Notes */
+            emphasis_notes?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Target Role Labels */
+            target_role_labels?: string[] | null;
+        };
+        /** LaneResponse */
+        LaneResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Default Resume Id */
+            default_resume_id: string | null;
+            /** Description */
+            description: string;
+            /** Emphasis Notes */
+            emphasis_notes: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            status: components["schemas"]["LaneStatus"];
+            /** Target Role Labels */
+            target_role_labels: string[];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * LaneStatus
+         * @enum {string}
+         */
+        LaneStatus: "active" | "archived";
         /** MeResponse */
         MeResponse: {
             /** Display Name */
@@ -188,6 +453,158 @@ export interface components {
             /** Primary Email */
             primary_email: string;
             status: components["schemas"]["UserStatus"];
+        };
+        /** OutlineSection */
+        OutlineSection: {
+            /** End Line */
+            end_line: number;
+            /** Heading */
+            heading: string;
+            /** Start Line */
+            start_line: number;
+        };
+        /** ParsedOutline */
+        ParsedOutline: {
+            /** Char Count */
+            char_count: number;
+            /** Line Count */
+            line_count: number;
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /** Sections */
+            sections?: components["schemas"]["OutlineSection"][];
+        };
+        /** ProfileResponse */
+        ProfileResponse: {
+            communication_preferences: components["schemas"]["CommunicationPreferences"];
+            /**
+             * Constraints Updated At
+             * Format: date-time
+             */
+            constraints_updated_at: string;
+            /** Current Location */
+            current_location: string | null;
+            /** Headline */
+            headline: string | null;
+            relocation_preference: components["schemas"]["RelocationPreference"];
+            remote_preference: components["schemas"]["RemotePreference"];
+            /** Summary */
+            summary: string | null;
+            /** Target Roles */
+            target_roles: components["schemas"]["TargetRole"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Work Authorization */
+            work_authorization: components["schemas"]["WorkAuthorizationEntry"][];
+        };
+        /** ProfileUpdate */
+        ProfileUpdate: {
+            communication_preferences?: components["schemas"]["CommunicationPreferences"];
+            /** Current Location */
+            current_location?: string | null;
+            /** Headline */
+            headline?: string | null;
+            /** @default unspecified */
+            relocation_preference: components["schemas"]["RelocationPreference"];
+            /** @default no_preference */
+            remote_preference: components["schemas"]["RemotePreference"];
+            /** Summary */
+            summary?: string | null;
+            /** Target Roles */
+            target_roles?: components["schemas"]["TargetRole"][];
+            /** Work Authorization */
+            work_authorization?: components["schemas"]["WorkAuthorizationEntry"][];
+        };
+        /**
+         * RelocationPreference
+         * @enum {string}
+         */
+        RelocationPreference: "open" | "not_open" | "unspecified";
+        /**
+         * RemotePreference
+         * @enum {string}
+         */
+        RemotePreference: "remote_only" | "hybrid" | "onsite" | "no_preference";
+        /** ResumeDetail */
+        ResumeDetail: {
+            /** Archived */
+            archived: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /** Byte Size */
+            byte_size: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Extraction Error Code */
+            extraction_error_code: string | null;
+            extraction_status: components["schemas"]["ExtractionStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Lane Id */
+            lane_id: string | null;
+            /** Mime Type */
+            mime_type: string;
+            /** Original Filename */
+            original_filename: string;
+            parsed_outline: components["schemas"]["ParsedOutline"] | null;
+            status: components["schemas"]["ResumeStatus"];
+        };
+        /** ResumePatch */
+        ResumePatch: {
+            /** Label */
+            label?: string | null;
+            /** Lane Id */
+            lane_id?: string | null;
+        };
+        /**
+         * ResumeStatus
+         * @enum {string}
+         */
+        ResumeStatus: "active" | "archived";
+        /** ResumeSummary */
+        ResumeSummary: {
+            /** Archived */
+            archived: boolean;
+            /** Archived At */
+            archived_at: string | null;
+            /** Byte Size */
+            byte_size: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Extraction Error Code */
+            extraction_error_code: string | null;
+            extraction_status: components["schemas"]["ExtractionStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Label */
+            label: string;
+            /** Lane Id */
+            lane_id: string | null;
+            /** Mime Type */
+            mime_type: string;
+            /** Original Filename */
+            original_filename: string;
+            status: components["schemas"]["ResumeStatus"];
         };
         /** SessionResponse */
         SessionResponse: {
@@ -214,6 +631,22 @@ export interface components {
              */
             last_seen_at: string;
         };
+        /** TargetRole */
+        TargetRole: {
+            /** Name */
+            name: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Priority
+             * @default normal
+             * @enum {string}
+             */
+            priority: "high" | "normal" | "low";
+        };
         /**
          * UserStatus
          * @enum {string}
@@ -231,6 +664,15 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WorkAuthorizationEntry */
+        WorkAuthorizationEntry: {
+            /** Country */
+            country: string;
+            /** Sponsorship Needed */
+            sponsorship_needed?: boolean | null;
+            /** Status */
+            status: string;
         };
     };
     responses: never;
@@ -517,6 +959,814 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lanes_api_v1_lanes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaneResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_lane_api_v1_lanes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaneCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaneResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_lane_api_v1_lanes__lane_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lane_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaneResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_lane_api_v1_lanes__lane_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lane_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaneResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_lane_api_v1_lanes__lane_id__unarchive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lane_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaneResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_api_v1_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_profile_api_v1_profile_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_resumes_api_v1_resumes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_resume_api_v1_resumes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    label?: string;
+                    /** Format: uuid */
+                    lane_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_resume_api_v1_resumes__resume_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeDetail"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_resume_api_v1_resumes__resume_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_resume_api_v1_resumes__resume_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_resume_file_api_v1_resumes__resume_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_resume_api_v1_resumes__resume_id__unarchive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resume_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumeSummary"];
+                };
             };
             /** @description Unauthorized */
             401: {

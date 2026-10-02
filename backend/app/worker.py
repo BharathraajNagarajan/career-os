@@ -6,6 +6,7 @@ from collections.abc import Callable
 from types import FrameType
 
 from app import __version__
+from app.artifacts.storage import FilesystemStorage
 from app.config import Settings, get_settings
 from app.core.db import create_db_engine, session_factory
 from app.core.logging import configure_logging, get_logger
@@ -66,7 +67,11 @@ def main() -> None:
     stop = threading.Event()
     install_signal_handlers(stop)
     worker_id = worker_identity()
-    register_job_handlers(job_registry)
+    register_job_handlers(
+        job_registry,
+        storage=FilesystemStorage(settings.artifact_storage_dir),
+        settings=settings,
+    )
     engine = create_db_engine(settings.database_url)
     runner = JobRunner(session_factory(engine), job_registry, settings, worker_id)
     try:
