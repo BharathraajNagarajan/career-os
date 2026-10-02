@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 2 (database foundation, tenancy pattern, events table, job queue). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 3 (authentication: Google sign-in, sessions, CSRF, account deletion; builds on the Task 2 database foundation). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -31,7 +31,8 @@ docs/       Frozen specification, ADRs, architecture notes, threat model
 
 ```bash
 cp .env.example .env
-# edit .env and set POSTGRES_PASSWORD and APP_DB_PASSWORD to two different URL-safe local values
+# edit .env: set POSTGRES_PASSWORD and APP_DB_PASSWORD to two different URL-safe local values,
+# SESSION_SECRET to 32+ random characters, and your Google OAuth client ID and secret (see docs/architecture/auth.md)
 docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
@@ -83,7 +84,14 @@ Settings come only from environment variables; the application never reads a `.e
 | `JOB_VISIBILITY_TIMEOUT_SECONDS` | `900` | A running job older than this is re-queued (crash recovery) |
 | `JOB_BACKOFF_BASE_SECONDS` | `10` | First retry delay; doubles per attempt, with jitter |
 | `JOB_BACKOFF_MAX_SECONDS` | `3600` | Retry delay cap |
+| `SESSION_SECRET` | required (API) | At least 32 characters; keys the CSRF HMAC and the pre-auth cookie encryption; never logged |
+| `SESSION_IDLE_TIMEOUT_HOURS` | `168` | A session unused for longer than this is rejected |
+| `SESSION_ABSOLUTE_TIMEOUT_HOURS` | `720` | Maximum session lifetime; also the cookie `Max-Age` |
+| `SESSION_COOKIE_SECURE` | `true` (Compose and `.env.example`: `false`) | `Secure` flag on cookies; `false` only for plain-HTTP local development |
+| `APP_BASE_URL` | `http://localhost:5173` | Public origin; the Google redirect URI is this plus `/api/v1/auth/google/callback` |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | required for sign-in (API) | Google OAuth web client; the secret is never logged. Not passed to the worker |
 | `TEST_ADMIN_DATABASE_URL` | unset | Owner URL for database tests; unset skips tests marked `db` |
+| `REQUIRE_DB_TESTS` | unset | Set to `1` (CI does) to fail the test run instead of skipping database tests when `TEST_ADMIN_DATABASE_URL` is missing |
 | `LLM_DAILY_COST_CAP_USD` | `1.00` | Per-user daily model cost cap (spec 13.1); enforced from Task 5 |
 
 ## Database, migrations and database tests
@@ -101,6 +109,12 @@ uv run pytest
 ```
 
 Database tests create and drop their own `career_os_test_<random>` database. Use `127.0.0.1` rather than `localhost` on Windows (see the architecture note).
+
+## Authentication
+
+Google OpenID Connect sign-in (authorization code flow with PKCE, state and nonce), hashed server-side sessions with idle and absolute expiry, CSRF double-submit tokens on mutations, session revocation and account deletion. Only `openid email profile` is requested at sign-in. See [docs/architecture/auth.md](docs/architecture/auth.md) for the flow, cookie flags, deletion path and Google Cloud setup. Every new route needs an entry in the isolation harness (`backend/tests/db/test_isolation.py`).
+
+The API contract is [backend/openapi.json](backend/openapi.json); regenerate it with `cd backend && uv run python -m app.openapi_export openapi.json`, then the frontend types with `cd frontend && npm run generate:api`. CI fails if either is out of date.
 
 ## Logging
 
