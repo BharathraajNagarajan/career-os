@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.models import LlmPurpose, LlmRun, LlmRunStatus, LlmTier
@@ -72,13 +72,16 @@ def test_structured_call_reserves_then_settles_and_records_a_manifest(
     assert run.purpose is LlmPurpose.CLASSIFY_EMAIL
     assert (run.prompt_id, run.prompt_version) == (SELFTEST_STRUCTURED, 1)
     assert (run.provider.value, run.model, run.tier) == ("fake", "fake-fast", LlmTier.FAST)
-    assert run.attempt == 1 and run.repair_of_run_id is None
-    assert run.input_tokens and run.output_tokens
+    assert run.attempt == 1
+    assert run.repair_of_run_id is None
+    assert run.input_tokens
+    assert run.output_tokens
     assert run.cost_usd == cost_usd(
         PRICE, input_tokens=run.input_tokens, output_tokens=run.output_tokens
     )
     assert run.cost_usd < run.reserved_cost_usd
-    assert run.settled_at is not None and run.latency_ms is not None
+    assert run.settled_at is not None
+    assert run.latency_ms is not None
     assert run.context_manifest == {
         "schema_version": 1,
         "entries": [{"entity_type": "resume", "entity_id": str(entry.entity_id), "version": 3}],
@@ -123,12 +126,19 @@ def test_invalid_output_triggers_exactly_one_repair_call(
         "output_invalid",
     )
     assert first.output is None
+    session.rollback()
+    nulls: int = session.execute(
+        text("SELECT count(*) FROM llm_runs WHERE user_id = :id AND output IS NULL"),
+        {"id": user_id},
+    ).scalar_one()
+    assert nulls == 1
     assert (second.attempt, second.status) == (2, LlmRunStatus.SUCCEEDED)
     assert second.repair_of_run_id == first.id
     assert result.run_id == second.id
     assert len(provider.requests) == 2
     repair_user = provider.requests[1].user
-    assert "tone" in repair_user and "ecstatic" in repair_user
+    assert "tone" in repair_user
+    assert "ecstatic" in repair_user
     assert "<untrusted_content" in repair_user
 
 
@@ -188,7 +198,8 @@ def test_a_crashed_call_leaves_a_reserved_row_that_keeps_counting(
 
     [run] = runs_for(session, user_id)
     assert run.status is LlmRunStatus.RESERVED
-    assert run.cost_usd is None and run.settled_at is None
+    assert run.cost_usd is None
+    assert run.settled_at is None
     spent = LlmRunRepository(session).spent_in_day(user_id=user_id, now=datetime.now(UTC))
     assert spent == run.reserved_cost_usd > 0
 
@@ -224,6 +235,7 @@ def test_budget_exhaustion_follows_spend_and_settlement_frees_headroom(
     probe, _ = make_gateway(app_sessions, script=[VALID])
     structured(probe, user_id)
     [first] = runs_for(session, user_id)
+    assert first.cost_usd is not None
     cap = first.cost_usd + first.reserved_cost_usd - Decimal("0.000001")
     gateway, provider = make_gateway(app_sessions, cap=str(cap), script=[VALID])
 
@@ -239,6 +251,7 @@ def test_a_reservation_that_exactly_fits_is_allowed(
     probe, _ = make_gateway(app_sessions, script=[VALID])
     structured(probe, user_id)
     [first] = runs_for(session, user_id)
+    assert first.cost_usd is not None
     gateway, _ = make_gateway(
         app_sessions, cap=str(first.cost_usd + first.reserved_cost_usd), script=[VALID]
     )
@@ -322,7 +335,8 @@ def test_purpose_and_tier_must_match_the_registered_prompt(
         )
     with pytest.raises(PromptMisuse):
         structured(gateway, user_id, max_output_tokens=0)
-    assert provider.requests == [] and runs_for(session, user_id) == []
+    assert provider.requests == []
+    assert runs_for(session, user_id) == []
 
 
 def test_untrusted_text_is_delimited_and_cannot_close_its_block(

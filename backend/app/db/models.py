@@ -378,7 +378,7 @@ class LlmRun(UserOwned, Base):
     reserved_cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6))
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     context_manifest: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     created_at: Mapped[datetime]
     settled_at: Mapped[datetime | None]
 
@@ -418,7 +418,7 @@ class ReviewItem(UserOwned, StateVersioned, HasCreatedAt, Base):
     )
     decided_at: Mapped[datetime | None]
     llm_run_id: Mapped[uuid.UUID | None]
-    decided_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    decided_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     decision_note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
