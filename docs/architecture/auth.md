@@ -79,7 +79,7 @@ Cookies:
 | `career_os_csrf` | Readable by JavaScript, SameSite=Lax, `Path=/`, `Secure` per setting, same `Max-Age` | CSRF token |
 | `career_os_preauth` | HttpOnly, SameSite=Lax, `Path=/api/v1/auth`, `Secure` per setting, 10 minutes | Sign-in state |
 
-`SESSION_COOKIE_SECURE` defaults to `true` in the application. The local Compose file and `.env.example` set it to `false` because local development is served over plain HTTP; never do this outside local development.
+`SESSION_COOKIE_SECURE` defaults to `true` in the application, Compose and `.env.example`. Browsers treat `http://localhost` as a secure context and accept `Secure` cookies there, so no local exception is needed.
 
 ## CSRF
 

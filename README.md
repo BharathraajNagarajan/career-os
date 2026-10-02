@@ -87,7 +87,7 @@ Settings come only from environment variables; the application never reads a `.e
 | `SESSION_SECRET` | required (API) | At least 32 characters; keys the CSRF HMAC and the pre-auth cookie encryption; never logged |
 | `SESSION_IDLE_TIMEOUT_HOURS` | `168` | A session unused for longer than this is rejected |
 | `SESSION_ABSOLUTE_TIMEOUT_HOURS` | `720` | Maximum session lifetime; also the cookie `Max-Age` |
-| `SESSION_COOKIE_SECURE` | `true` (Compose and `.env.example`: `false`) | `Secure` flag on cookies; `false` only for plain-HTTP local development |
+| `SESSION_COOKIE_SECURE` | `true` | `Secure` flag on cookies; browsers accept it on `http://localhost`, so keep `true` locally (set `false` only if a browser rejects the cookie) |
 | `APP_BASE_URL` | `http://localhost:5173` | Public origin; the Google redirect URI is this plus `/api/v1/auth/google/callback` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | required for sign-in (API) | Google OAuth web client; the secret is never logged. Not passed to the worker |
 | `TEST_ADMIN_DATABASE_URL` | unset | Owner URL for database tests; unset skips tests marked `db` |
