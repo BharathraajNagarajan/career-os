@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.db.tenancy import NotFound
 from app.llm.errors import LlmBudgetExhausted
+from app.state_machines.errors import TransitionError
 
 
 class ErrorBody(BaseModel):
@@ -66,3 +67,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(LlmBudgetExhausted)
     def handle_budget_exhausted(_: Request, exc: LlmBudgetExhausted) -> JSONResponse:
         return error_response(429, exc.code)
+
+    @app.exception_handler(TransitionError)
+    def handle_transition_error(_: Request, exc: TransitionError) -> JSONResponse:
+        return error_response(exc.status_code, exc.code)

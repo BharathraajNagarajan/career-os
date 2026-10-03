@@ -2,6 +2,7 @@ import re
 import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -138,11 +139,15 @@ def company_foreign(personas: Personas) -> dict[str, str]:
 
 def assert_a_opportunity_untouched(personas: Personas) -> None:
     listed = personas.a.client.get(OPPORTUNITIES).json()
-    assert [row["id"] for row in listed] == [personas.a_ids["opportunity"]]
+    assert {row["id"] for row in listed} == {
+        personas.a_ids["opportunity"],
+        personas.a_ids["applied_opportunity"],
+    }
     body = personas.a.client.get(f"{OPPORTUNITIES}/{personas.a_ids['opportunity']}").json()
     assert body["title"] == A_OPPORTUNITY_TITLE
     assert body["priority"] == "normal"
     assert body["status"] == "new"
+    assert body["allowed_actions"] == ["save", "skip", "apply", "close"]
     assert body["extraction_status"] == "pending"
     assert body["state_version"] == int(personas.a_ids["opportunity_version"])
     assert body["company"] is None
@@ -157,9 +162,45 @@ def assert_a_opportunity_untouched(personas: Personas) -> None:
 
 def assert_a_company_untouched(personas: Personas) -> None:
     companies = personas.a.client.get(COMPANIES).json()
-    assert [(row["id"], row["name"], row["strategic_priority"]) for row in companies] == [
-        (personas.a_ids["company"], A_COMPANY, "normal")
-    ]
+    assert len(companies) == 2
+    by_id = {row["id"]: (row["name"], row["strategic_priority"]) for row in companies}
+    assert by_id[personas.a_ids["company"]] == (A_COMPANY, "normal")
+
+
+APPLICATIONS = "/api/v1/applications"
+A_APPLICATION_NOTE = "Persona A application note"
+EVENT_BODY = {
+    "expected_state_version": 1,
+    "event_type": "NOTE_ADDED",
+    "occurred_at": "2026-01-01T00:00:00Z",
+    "note": "planted by persona b",
+}
+
+
+def application_foreign(personas: Personas) -> dict[str, str]:
+    return {"application_id": personas.a_ids["application"]}
+
+
+def event_foreign(personas: Personas) -> dict[str, str]:
+    return {
+        "application_id": personas.a_ids["application"],
+        "event_id": personas.a_ids["application_event"],
+    }
+
+
+def assert_a_application_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(APPLICATIONS).json()
+    assert [row["id"] for row in listed] == [personas.a_ids["application"]]
+    body = personas.a.client.get(f"{APPLICATIONS}/{personas.a_ids['application']}").json()
+    assert body["stage"] == "assessment"
+    assert body["is_terminal"] is False
+    assert body["state_version"] == int(personas.a_ids["application_version"])
+    timeline = personas.a.client.get(
+        f"{OPPORTUNITIES}/{personas.a_ids['applied_opportunity']}/timeline"
+    ).json()
+    assert [entry["voided"] for entry in timeline].count(True) == 0
+    assert [entry["note"] for entry in timeline if entry["note"]] == [A_APPLICATION_NOTE]
+    assert len(timeline) == int(personas.a_ids["timeline_length"])
 
 
 PROTECTED: dict[Route_, IsolationCase] = {
@@ -287,7 +328,10 @@ PROTECTED: dict[Route_, IsolationCase] = {
     ("GET", OPPORTUNITIES): IsolationCase(
         OPPORTUNITIES,
         list_ids=lambda body: {row["id"] for row in body},
-        a_foreign_ids=lambda personas: {personas.a_ids["opportunity"]},
+        a_foreign_ids=lambda personas: {
+            personas.a_ids["opportunity"],
+            personas.a_ids["applied_opportunity"],
+        },
     ),
     ("GET", OPPORTUNITIES + "/{opportunity_id}"): IsolationCase(
         OPPORTUNITIES + "/{opportunity_id}",
@@ -354,6 +398,63 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=company_foreign,
         a_untouched=assert_a_company_untouched,
     ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/save"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/save",
+        body={"expected_state_version": 1},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/skip"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/skip",
+        body={"expected_state_version": 1, "reason": "planted"},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/close"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/close",
+        body={"expected_state_version": 1},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/apply"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/apply",
+        body={"expected_state_version": 1},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("GET", OPPORTUNITIES + "/{opportunity_id}/timeline"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/timeline",
+        foreign_params=lambda personas: {"opportunity_id": personas.a_ids["applied_opportunity"]},
+        a_untouched=assert_a_application_untouched,
+    ),
+    ("GET", APPLICATIONS): IsolationCase(
+        APPLICATIONS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["application"]},
+    ),
+    ("GET", APPLICATIONS + "/{application_id}"): IsolationCase(
+        APPLICATIONS + "/{application_id}",
+        foreign_params=application_foreign,
+        a_untouched=assert_a_application_untouched,
+    ),
+    ("POST", APPLICATIONS + "/{application_id}/events"): IsolationCase(
+        APPLICATIONS + "/{application_id}/events",
+        body=EVENT_BODY,
+        foreign_params=application_foreign,
+        a_untouched=assert_a_application_untouched,
+    ),
+    ("POST", APPLICATIONS + "/{application_id}/events/{event_id}/void"): IsolationCase(
+        APPLICATIONS + "/{application_id}/events/{event_id}/void",
+        body={"expected_state_version": 1},
+        foreign_params=event_foreign,
+        a_untouched=assert_a_application_untouched,
+    ),
+    ("POST", APPLICATIONS + "/{application_id}/reopen"): IsolationCase(
+        APPLICATIONS + "/{application_id}/reopen",
+        body={"expected_state_version": 1},
+        foreign_params=application_foreign,
+        a_untouched=assert_a_application_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
@@ -362,9 +463,13 @@ PROTECTED: dict[Route_, IsolationCase] = {
 }
 
 
-def seed_opportunity(persona: Persona, *, title: str, company: str, line: str) -> dict[str, str]:
+def seed_opportunity(
+    persona: Persona, *, title: str, company: str, line: str, variant: str = ""
+) -> dict[str, str]:
     opportunity = persona.request(
-        "POST", OPPORTUNITIES + "/ingest", json={"jd_text": jd_variant(f"seed {persona.label}")}
+        "POST",
+        OPPORTUNITIES + "/ingest",
+        json={"jd_text": jd_variant(f"seed {persona.label}{variant}")},
     ).json()
     persona.request(
         "PATCH",
@@ -383,6 +488,44 @@ def seed_opportunity(persona: Persona, *, title: str, company: str, line: str) -
         "opportunity_version": str(detail["state_version"]),
         "qualification": created["id"],
         "company": company_row["id"],
+    }
+
+
+def seed_application(persona: Persona, a_ids: dict[str, str]) -> dict[str, str]:
+    other = seed_opportunity(
+        persona,
+        title=f"Persona {persona.label.upper()} applied title",
+        company=f"Persona {persona.label.upper()} applied company",
+        line=f"Persona {persona.label.upper()} applied line",
+        variant=" applied",
+    )
+    applied = persona.request(
+        "POST",
+        f"{OPPORTUNITIES}/{other['opportunity']}/apply",
+        json={
+            "expected_state_version": int(other["opportunity_version"]),
+            "resume_id": a_ids["resume"],
+            "lane_id": a_ids["lane"],
+        },
+    ).json()["application"]
+    recorded = persona.request(
+        "POST",
+        f"{APPLICATIONS}/{applied['id']}/events",
+        json={
+            "expected_state_version": applied["state_version"],
+            "event_type": "ASSESSMENT_RECEIVED",
+            "occurred_at": datetime.now(UTC).isoformat(),
+            "note": A_APPLICATION_NOTE,
+        },
+    ).json()
+    timeline = persona.request("GET", f"{OPPORTUNITIES}/{other['opportunity']}/timeline").json()
+    event = next(entry for entry in timeline if entry["event_type"] == "ASSESSMENT_RECEIVED")
+    return {
+        "applied_opportunity": other["opportunity"],
+        "application": applied["id"],
+        "application_version": str(recorded["state_version"]),
+        "application_event": event["id"],
+        "timeline_length": str(len(timeline)),
     }
 
 
@@ -405,13 +548,17 @@ def personas(
     a = make_persona(app, idp, "a")
     b = make_persona(app, idp, "b")
     a_ids = seed(a, label=A_LABEL, headline=A_HEADLINE, lane=A_LANE)
-    seed(b, label="Persona B resume", headline="Persona B headline", lane="Persona B seeded lane")
+    b_ids = seed(
+        b, label="Persona B resume", headline="Persona B headline", lane="Persona B seeded lane"
+    )
     a_ids.update(
         seed_opportunity(a, title=A_OPPORTUNITY_TITLE, company=A_COMPANY, line=A_QUALIFICATION)
     )
+    a_ids.update(seed_application(a, a_ids))
     seed_opportunity(
         b, title="Persona B title", company="Persona B seeded company", line="Persona B line"
     )
+    seed_application(b, b_ids)
     for owner_persona in (a, b):
         gateway, _ = make_gateway(app_sessions, script=[VALID])
         structured(gateway, owner_persona.user_id)

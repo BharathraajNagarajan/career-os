@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 6 (JD ingestion, extraction, companies, duplicates and priorities; builds on the model gateway of Task 5). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 7 (opportunity and application state machines, decisions, timeline; builds on the JD ingestion of Task 6). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -111,6 +111,10 @@ Settings come only from environment variables; the application never reads a `.e
 ## Opportunities and job descriptions
 
 Paste a job description on the Opportunities page (optionally with the source URL, which is stored and shown as text but never fetched). The text is kept as an immutable artifact, and the pasting itself authorizes one model call that extracts the company, title, team, job ID, location, workplace type and the requirement lines. Each requirement keeps the posting's exact wording (anything the model invented is dropped), and every extracted value stays editable; extraction only fills fields that are still empty and never retries by itself. Companies are matched by domain, name or alias, possible duplicates are listed on each posting, and priority is yours to set on postings and companies. With the default fake provider the extraction returns placeholder values, so no real call is made. See [docs/architecture/opportunities.md](docs/architecture/opportunities.md).
+
+## Decisions, applications and the timeline
+
+On an opportunity you can Save, Skip, Apply or Close it; the server says which of those are allowed and the page only shows those. Apply records that you applied (nothing is sent anywhere) and creates the application in the same transaction. On the application you record what happened (assessment received, interview scheduled, rejected and so on, dated when it really happened, even in the past), void a mistaken entry, or reopen a closed application. History is append-only: voiding adds a correction event and the entry stays in the timeline, marked. The stage is always recomputed from the events, so it cannot disagree with the history. No model call is involved. See [docs/architecture/state-machines.md](docs/architecture/state-machines.md).
 
 ## Database, migrations and database tests
 

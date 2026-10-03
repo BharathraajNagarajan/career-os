@@ -4,6 +4,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
+from app.applications.schemas import ApplicationResponse, ApplyResponse, TimelineEntryResponse
+from app.applications.service import ApplicationService
+from app.applications.timeline import build_timeline
 from app.artifacts.storage import StorageAdapter
 from app.auth.deps import current_auth, get_db_session, verify_csrf
 from app.auth.service import AuthContext
@@ -11,11 +14,14 @@ from app.config import Settings
 from app.core.errors import ErrorResponse
 from app.db.models import OpportunityStatus, Priority
 from app.opportunities.company_service import CompanyService
+from app.opportunities.decisions import DecisionService
 from app.opportunities.schemas import (
+    ApplyRequest,
     CompanyCreate,
     CompanyDetail,
     CompanyPatch,
     CompanyResponse,
+    DecisionRequest,
     DuplicateMatch,
     IngestRequest,
     OpportunityDetail,
@@ -27,6 +33,7 @@ from app.opportunities.schemas import (
     QualificationResponse,
 )
 from app.opportunities.service import OpportunityService
+from app.state_machines.opportunity import OpportunityCommand
 
 router = APIRouter(
     prefix="/api/v1",
@@ -67,7 +74,17 @@ def company_service(session: DbSession) -> CompanyService:
     return CompanyService(session)
 
 
+def decision_service(session: DbSession) -> DecisionService:
+    return DecisionService(session)
+
+
 Opportunities = Annotated[OpportunityService, Depends(opportunity_service)]
+Decisions = Annotated[DecisionService, Depends(decision_service)]
+COMMAND_ERRORS: dict[int | str, dict[str, Any]] = {
+    404: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+}
 Companies = Annotated[CompanyService, Depends(company_service)]
 
 
@@ -228,3 +245,82 @@ def patch_company(
 ) -> CompanyResponse:
     row = service.patch(user_id=auth.user_id, company_id=company_id, data=body)
     return CompanyResponse.build(row)
+
+
+def decision_route(command: OpportunityCommand) -> None:
+    def endpoint(
+        opportunity_id: uuid.UUID,
+        body: DecisionRequest,
+        auth: Auth,
+        decisions: Decisions,
+        service: Opportunities,
+    ) -> OpportunityDetail:
+        decisions.decide(
+            user_id=auth.user_id,
+            opportunity_id=opportunity_id,
+            command=command,
+            expected_state_version=body.expected_state_version,
+            reason=body.reason,
+        )
+        return detail(service, auth.user_id, opportunity_id)
+
+    endpoint.__name__ = f"{command.value}_opportunity"
+    router.add_api_route(
+        f"/opportunities/{{opportunity_id}}/{command.value}",
+        endpoint,
+        methods=["POST"],
+        response_model=OpportunityDetail,
+        responses=COMMAND_ERRORS,
+    )
+
+
+for decision_command in (
+    OpportunityCommand.SAVE,
+    OpportunityCommand.SKIP,
+    OpportunityCommand.CLOSE,
+):
+    decision_route(decision_command)
+
+
+@router.post(
+    "/opportunities/{opportunity_id}/apply",
+    response_model=ApplyResponse,
+    responses=COMMAND_ERRORS,
+)
+def apply_to_opportunity(
+    opportunity_id: uuid.UUID,
+    body: ApplyRequest,
+    auth: Auth,
+    decisions: Decisions,
+    service: Opportunities,
+) -> ApplyResponse:
+    application = decisions.apply(
+        user_id=auth.user_id,
+        opportunity_id=opportunity_id,
+        expected_state_version=body.expected_state_version,
+        resume_id=body.resume_id,
+        lane_id=body.lane_id,
+        channel=body.channel,
+        applied_at=body.applied_at,
+    )
+    row, opportunity, company = ApplicationService(decisions.session).get(
+        user_id=auth.user_id, application_id=application.id
+    )
+    return ApplyResponse(
+        opportunity=detail(service, auth.user_id, opportunity_id),
+        application=ApplicationResponse.build(row, opportunity, company),
+    )
+
+
+@router.get(
+    "/opportunities/{opportunity_id}/timeline",
+    response_model=list[TimelineEntryResponse],
+    responses=NOT_FOUND,
+)
+def opportunity_timeline(
+    opportunity_id: uuid.UUID, auth: Auth, session: DbSession
+) -> list[TimelineEntryResponse]:
+    return [
+        TimelineEntryResponse.model_validate(entry, from_attributes=True)
+        for entry in build_timeline(session, user_id=auth.user_id, opportunity_id=opportunity_id)
+    ]

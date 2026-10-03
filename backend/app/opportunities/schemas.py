@@ -3,9 +3,10 @@ from datetime import datetime
 from typing import Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.db.models import (
+    ApplicationChannel,
     Company,
     CompanyOrigin,
     ExtractionStatus,
@@ -19,7 +20,13 @@ from app.db.models import (
     WorkplaceType,
 )
 from app.opportunities.countries import ISO_3166_ALPHA2
-from app.opportunities.normalize import collapse_whitespace, normalize_domain, normalize_skill_keys
+from app.opportunities.normalize import (
+    clean_note,
+    collapse_whitespace,
+    normalize_domain,
+    normalize_skill_keys,
+)
+from app.state_machines.opportunity import OpportunityCommand, allowed_actions
 
 MAX_URL_CHARS = 2048
 MAX_LOCATION_ITEMS = 10
@@ -155,6 +162,26 @@ class PriorityRequest(StrictModel):
     priority: Priority
 
 
+class DecisionRequest(StrictModel):
+    expected_state_version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def _clean_reason(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return clean_note(value)
+
+
+class ApplyRequest(StrictModel):
+    expected_state_version: int = Field(ge=1)
+    resume_id: uuid.UUID | None = None
+    lane_id: uuid.UUID | None = None
+    channel: ApplicationChannel = ApplicationChannel.OTHER
+    applied_at: AwareDatetime | None = None
+
+
 def clean_skill_keys(value: list[str]) -> list[str]:
     return normalize_skill_keys(value)
 
@@ -246,6 +273,7 @@ class OpportunitySummary(BaseModel):
     content_updated_at: datetime
     discovered_at: datetime
     state_version: int
+    allowed_actions: list[OpportunityCommand]
 
     @classmethod
     def build(cls, row: Opportunity, company: Company | None) -> Self:
@@ -263,6 +291,7 @@ class OpportunitySummary(BaseModel):
             content_updated_at=row.content_updated_at,
             discovered_at=row.discovered_at,
             state_version=row.state_version,
+            allowed_actions=allowed_actions(row.status),
         )
 
 

@@ -73,3 +73,48 @@ export function companyErrorMessage(error: unknown): string {
   }
   return GENERIC;
 }
+
+export const INVALID_TRANSITION_MESSAGE =
+  "That is no longer possible from the current state. The latest state is shown.";
+
+const COMMAND_ERRORS: Record<string, string> = {
+  conflict: "This changed since you opened it. Refresh to see the latest version, then try again.",
+  invalid_transition: INVALID_TRANSITION_MESSAGE,
+  not_found: "This item no longer exists.",
+  occurred_at_in_future: "That date and time is too far in the future.",
+  event_type_not_allowed: "That event type cannot be recorded here.",
+  terminal_before_reopen:
+    "A closing event cannot be dated before the reopen. Date it after the reopen.",
+  cannot_void: "That entry cannot be voided.",
+  already_voided: "That entry is already voided.",
+  not_terminal: "Only a closed application can be reopened.",
+  resume_archived: "That resume is archived. Choose an active one.",
+  lane_archived: "That lane is archived. Choose an active one.",
+};
+
+export function commandErrorMessage(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    return (
+      COMMAND_ERRORS[error.code] ??
+      (error.status === 422 ? "Check the values you entered." : GENERIC)
+    );
+  }
+  return GENERIC;
+}
+
+export function needsRefresh(error: unknown): boolean {
+  return (
+    error instanceof ApiRequestError &&
+    (error.code === "conflict" ||
+      error.code === "invalid_transition" ||
+      error.code === "not_terminal" ||
+      error.code === "already_voided" ||
+      error.code === "cannot_void" ||
+      error.code === "event_type_not_allowed")
+  );
+}
+
+export function humanize(eventType: string): string {
+  const words = eventType.toLowerCase().replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

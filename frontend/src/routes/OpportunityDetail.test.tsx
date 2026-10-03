@@ -27,6 +27,12 @@ function serve(initial: Detail, mutate?: Mutation, duplicates: DuplicateMatch[] 
     if (call.method === "GET" && call.url === `${BASE}/duplicates`) {
       return jsonResponse(server.duplicates);
     }
+    if (call.method === "GET" && call.url === `${BASE}/timeline`) {
+      return jsonResponse([]);
+    }
+    if (call.method === "GET" && call.url.startsWith("/api/v1/applications")) {
+      return jsonResponse([]);
+    }
     if (call.method === "GET" && call.url === "/api/v1/companies") {
       return jsonResponse([company(), company({ id: "company-2", name: "Other Corp" })]);
     }

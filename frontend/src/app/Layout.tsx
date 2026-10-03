@@ -8,8 +8,8 @@ export function Layout() {
         <nav aria-label="Main" className="shell-nav">
           <Link to="/profile">Profile</Link> <Link to="/resumes">Resumes</Link>{" "}
           <Link to="/lanes">Lanes</Link> <Link to="/opportunities">Opportunities</Link>{" "}
-          <Link to="/companies">Companies</Link> <Link to="/review">Review</Link>{" "}
-          <Link to="/settings">Settings</Link>
+          <Link to="/applications">Applications</Link> <Link to="/companies">Companies</Link>{" "}
+          <Link to="/review">Review</Link> <Link to="/settings">Settings</Link>
         </nav>
       </header>
       <main className="shell-main">
