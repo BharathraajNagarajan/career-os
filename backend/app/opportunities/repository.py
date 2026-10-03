@@ -244,15 +244,21 @@ class OpportunityRepository(UserScopedRepository[Opportunity]):
         self.session.expire_all()
         return int(version)
 
-    def mark_failed(self, *, user_id: uuid.UUID, id: uuid.UUID, error_code: str) -> None:
-        self.update_fields(
-            user_id=user_id,
-            id=id,
-            values={
-                "extraction_status": ExtractionStatus.FAILED.value,
-                "extraction_error_code": error_code,
-            },
-        )
+    def mark_failed(
+        self,
+        *,
+        user_id: uuid.UUID,
+        id: uuid.UUID,
+        error_code: str,
+        llm_run_id: uuid.UUID | None = None,
+    ) -> None:
+        values: dict[str, Any] = {
+            "extraction_status": ExtractionStatus.FAILED.value,
+            "extraction_error_code": error_code,
+        }
+        if llm_run_id is not None:
+            values["llm_run_id"] = llm_run_id
+        self.update_fields(user_id=user_id, id=id, values=values)
 
 
 class QualificationRepository(UserScopedRepository[Qualification]):

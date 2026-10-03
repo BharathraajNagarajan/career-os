@@ -24,6 +24,8 @@ const EXTRACTION_ERRORS: Record<string, string> = {
     "The model's answer could not be validated, so nothing was filled in. You can retry.",
   llm_provider_error: "The model service had a problem, so nothing was filled in. You can retry.",
   jd_text_missing: "The stored job description could not be read.",
+  stored_output_invalid:
+    "A saved model answer could not be read, so nothing was filled in. You can retry.",
 };
 
 export function ingestErrorMessage(error: unknown): string {

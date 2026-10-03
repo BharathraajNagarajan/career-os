@@ -2,6 +2,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -11,6 +12,7 @@ from app.db.models import (
     AggregateType,
     ExtractionStatus,
     LlmPurpose,
+    LlmRun,
     LlmTier,
     Opportunity,
     Qualification,
@@ -24,6 +26,7 @@ from app.jobs.registry import JobContext
 from app.llm.errors import LlmError
 from app.llm.gateway import ModelGateway
 from app.llm.prompts.jd_extract import JD_EXTRACT, JdExtraction
+from app.llm.repository import LlmRunRepository
 from app.llm.schemas import ManifestEntry
 from app.opportunities.company_service import MAX_NAME_CHARS, resolve_company
 from app.opportunities.countries import ISO_3166_ALPHA2
@@ -46,6 +49,7 @@ from app.opportunities.schemas import (
 log = get_logger(__name__)
 
 JD_TEXT_MISSING = "jd_text_missing"
+STORED_OUTPUT_INVALID = "stored_output_invalid"
 MAX_QUALIFICATION_CHARS = 1000
 
 
@@ -120,13 +124,28 @@ def clean_extraction(raw: JdExtraction, jd_text: str) -> CleanExtraction:
     )
 
 
+def stored_extraction(run: LlmRun) -> JdExtraction | None:
+    try:
+        data = (run.output or {})["data"]
+        return JdExtraction.model_validate(data)
+    except (KeyError, TypeError, ValidationError):
+        return None
+
+
 def _mark_failed(
-    session: Session, *, user_id: uuid.UUID, opportunity_id: uuid.UUID, code: str
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    opportunity_id: uuid.UUID,
+    code: str,
+    run_id: uuid.UUID | None = None,
 ) -> None:
     repository = OpportunityRepository(session)
     opportunity = repository.lock(user_id=user_id, id=opportunity_id)
     if opportunity.extraction_status is ExtractionStatus.PENDING:
-        repository.mark_failed(user_id=user_id, id=opportunity.id, error_code=code)
+        repository.mark_failed(
+            user_id=user_id, id=opportunity.id, error_code=code, llm_run_id=run_id
+        )
     log.info("jd_extraction_failed", opportunity_id=str(opportunity_id), error_code=code)
 
 
@@ -263,6 +282,34 @@ def make_extract_jd_handler(
         if not jd_text:
             _mark_failed(
                 session, user_id=user_id, opportunity_id=opportunity_id, code=JD_TEXT_MISSING
+            )
+            return
+        reusable = LlmRunRepository(session).find_settled_structured(
+            user_id=user_id,
+            purpose=LlmPurpose.EXTRACT_JD,
+            prompt_id=JD_EXTRACT,
+            artifact_id=artifact_id,
+            exclude_run_id=opportunity.llm_run_id,
+        )
+        if reusable is not None:
+            run_id = reusable.id
+            stored = stored_extraction(reusable)
+            if stored is None:
+                _mark_failed(
+                    session,
+                    user_id=user_id,
+                    opportunity_id=opportunity_id,
+                    code=STORED_OUTPUT_INVALID,
+                    run_id=run_id,
+                )
+                return
+            log.info("jd_extraction_reused", opportunity_id=str(opportunity_id), run_id=str(run_id))
+            apply_extraction(
+                session,
+                user_id=user_id,
+                opportunity_id=opportunity_id,
+                clean=clean_extraction(stored, jd_text),
+                run_id=run_id,
             )
             return
         session.commit()
