@@ -2,7 +2,6 @@ import hashlib
 import io
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -120,7 +119,6 @@ class OpportunityService:
                 )
             )
             self.session.flush()
-            now = datetime.now(UTC)
             opportunity = Opportunity(
                 user_id=user_id,
                 jd_artifact_id=artifact_id,
@@ -131,8 +129,6 @@ class OpportunityService:
                 status=OpportunityStatus.NEW,
                 priority=Priority.NORMAL,
                 extraction_status=ExtractionStatus.PENDING,
-                content_updated_at=now,
-                discovered_at=now,
             )
             self.session.add(opportunity)
             self.session.flush()

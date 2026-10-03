@@ -45,7 +45,7 @@ from tests.db.opportunity_helpers import (
         ("Example Private Limited", "example"),
         ("Example GmbH", "example"),
         ("Example PLC", "example"),
-        ("Ｅxample  Corp", "example"),
+        ("Ｅxample  Corp", "example"),  # noqa: RUF001
         ("AT&T Inc", "att"),
         ("Example-Widgets Ltd", "examplewidgets"),
         ("  Example   Widgets  ", "example widgets"),
@@ -66,7 +66,7 @@ def test_company_names_normalize_case_punctuation_and_trailing_legal_suffixes(
 
 
 def test_only_listed_suffixes_are_stripped_and_only_at_the_end() -> None:
-    assert LEGAL_SUFFIXES == {
+    assert {
         "inc",
         "llc",
         "ltd",
@@ -81,7 +81,7 @@ def test_only_listed_suffixes_are_stripped_and_only_at_the_end() -> None:
         "bv",
         "pvt",
         "private",
-    }
+    } == LEGAL_SUFFIXES
     assert normalize_company_name("Private Example") == "private example"
     assert normalize_company_name("Example Holdings") == "example holdings"
 
@@ -175,13 +175,13 @@ def test_other_url_shapes_are_rejected(value: str) -> None:
 
 
 def test_request_models_reject_unknown_and_null_required_fields() -> None:
-    with pytest.raises(ValueError, match="source_url|http"):
+    with pytest.raises(ValueError, match=r"http or https"):
         IngestRequest(jd_text="x", source_url="ftp://example.test")
     with pytest.raises(ValueError, match="cannot be null"):
         OpportunityPatch(expected_state_version=1, workplace_type=None)
     with pytest.raises(ValueError, match="cannot be null"):
         OpportunityPatch(expected_state_version=1, locations=None)
-    with pytest.raises(ValueError, match="text_verbatim|Extra"):
+    with pytest.raises(ValueError, match=r"text_verbatim"):
         QualificationPatch.model_validate({"text_verbatim": "changed"})
     with pytest.raises(ValueError, match="cannot be null"):
         QualificationPatch(kind=None)
