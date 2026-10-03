@@ -1,7 +1,10 @@
 import io
+import ipaddress
 import json
 import os
+import socket
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -32,6 +35,36 @@ def read_logs(log_stream: io.StringIO) -> Callable[[], list[dict[str, object]]]:
         return [json.loads(line) for line in log_stream.getvalue().splitlines() if line]
 
     return read
+
+
+class NetworkAccessBlocked(RuntimeError):
+    pass
+
+
+def _is_local(address: Any) -> bool:
+    if not isinstance(address, tuple) or not address:
+        return True
+    host = address[0]
+    if not isinstance(host, str):
+        return True
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def block_outbound_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_connect = socket.socket.connect
+
+    def guarded_connect(self: socket.socket, address: Any) -> None:
+        if not _is_local(address):
+            raise NetworkAccessBlocked(f"tests may not reach {address[0]!r}")
+        real_connect(self, address)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

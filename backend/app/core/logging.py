@@ -35,6 +35,20 @@ ALLOWED_FIELDS = frozenset(
         "environment",
         "version",
         "dropped_field_count",
+        "run_id",
+        "purpose",
+        "prompt_id",
+        "prompt_version",
+        "provider",
+        "model",
+        "tier",
+        "status",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
+        "latency_ms",
+        "review_item_id",
+        "proposal_type",
     }
 )
 

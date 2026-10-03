@@ -8,12 +8,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.routing import Route
 
 from tests.auth.fake_idp import FakeIdentityProvider
 from tests.db.auth_helpers import Persona, make_persona, new_client
+from tests.db.llm_helpers import VALID, make_gateway, structured
 from tests.db.resume_helpers import create_lane, upload
+from tests.db.review_helpers import create_item
 from tests.synthetic import synthetic_pdf
 
 pytestmark = pytest.mark.db
@@ -92,6 +94,25 @@ def assert_a_lane_untouched(personas: Personas) -> None:
         (personas.a_ids["lane"], A_LANE, "active")
     ]
     assert_a_resume_untouched(personas)
+
+
+A_BUDGET_SPENT = "a_budget_spent"
+REVIEW_ITEMS = "/api/v1/review-items"
+REVIEW_FOREIGN = lambda personas: {"item_id": personas.a_ids["review"]}  # noqa: E731
+REVIEW_BODY = {"expected_state_version": 1}
+
+
+def assert_a_budget_untouched(personas: Personas) -> None:
+    body = personas.a.client.get("/api/v1/llm/budget").json()
+    assert body["spent_usd"] == personas.a_ids[A_BUDGET_SPENT]
+
+
+def assert_a_review_item_untouched(personas: Personas) -> None:
+    body = personas.a.client.get(f"{REVIEW_ITEMS}/{personas.a_ids['review']}").json()
+    assert body["status"] == "pending"
+    assert body["state_version"] == 1
+    assert body["decided_at"] is None
+    assert personas.a.client.get("/api/v1/profile").json()["headline"] == A_HEADLINE
 
 
 PROTECTED: dict[Route_, IsolationCase] = {
@@ -180,6 +201,37 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=lambda personas: {"lane_id": personas.a_ids["lane"]},
         a_untouched=assert_a_lane_untouched,
     ),
+    ("GET", "/api/v1/llm/budget"): IsolationCase(
+        "/api/v1/llm/budget", a_untouched=assert_a_budget_untouched
+    ),
+    ("GET", REVIEW_ITEMS): IsolationCase(
+        REVIEW_ITEMS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["review"]},
+    ),
+    ("GET", REVIEW_ITEMS + "/{item_id}"): IsolationCase(
+        REVIEW_ITEMS + "/{item_id}",
+        foreign_params=REVIEW_FOREIGN,
+        a_untouched=assert_a_review_item_untouched,
+    ),
+    ("POST", REVIEW_ITEMS + "/{item_id}/confirm"): IsolationCase(
+        REVIEW_ITEMS + "/{item_id}/confirm",
+        body=REVIEW_BODY,
+        foreign_params=REVIEW_FOREIGN,
+        a_untouched=assert_a_review_item_untouched,
+    ),
+    ("POST", REVIEW_ITEMS + "/{item_id}/edit-confirm"): IsolationCase(
+        REVIEW_ITEMS + "/{item_id}/edit-confirm",
+        body={**REVIEW_BODY, "payload": {"schema_version": 1, "name": "hijacked"}},
+        foreign_params=REVIEW_FOREIGN,
+        a_untouched=assert_a_review_item_untouched,
+    ),
+    ("POST", REVIEW_ITEMS + "/{item_id}/reject"): IsolationCase(
+        REVIEW_ITEMS + "/{item_id}/reject",
+        body=REVIEW_BODY,
+        foreign_params=REVIEW_FOREIGN,
+        a_untouched=assert_a_review_item_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
@@ -198,11 +250,23 @@ def seed(persona: Persona, *, label: str, headline: str, lane: str) -> dict[str,
 
 
 @pytest.fixture
-def personas(app: FastAPI, idp: FakeIdentityProvider, owner_session: Session) -> Personas:
+def personas(
+    app: FastAPI,
+    idp: FakeIdentityProvider,
+    owner_session: Session,
+    app_sessions: sessionmaker[Session],
+) -> Personas:
     a = make_persona(app, idp, "a")
     b = make_persona(app, idp, "b")
     a_ids = seed(a, label=A_LABEL, headline=A_HEADLINE, lane=A_LANE)
     seed(b, label="Persona B resume", headline="Persona B headline", lane="Persona B seeded lane")
+    for owner_persona in (a, b):
+        gateway, _ = make_gateway(app_sessions, script=[VALID])
+        structured(gateway, owner_persona.user_id)
+    registry = app.state.review_registry
+    a_ids["review"] = str(create_item(app_sessions, registry, a.user_id, name="Persona A skill"))
+    create_item(app_sessions, registry, b.user_id, name="Persona B skill")
+    a_ids[A_BUDGET_SPENT] = a.client.get("/api/v1/llm/budget").json()["spent_usd"]
     return Personas(a, b, owner_session, a_ids)
 
 

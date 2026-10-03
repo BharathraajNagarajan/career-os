@@ -10,6 +10,7 @@ import {
   signOut,
 } from "../api/auth";
 import { SIGN_IN_PATH } from "../api/client";
+import { BudgetIndicator } from "./BudgetIndicator";
 
 export function Settings() {
   const client = useQueryClient();
@@ -42,6 +43,9 @@ export function Settings() {
   return (
     <section aria-labelledby="settings-title">
       <h1 id="settings-title">Settings</h1>
+
+      <h2>AI budget</h2>
+      <BudgetIndicator />
 
       <h2>Sessions</h2>
       {sessions.isPending && <p role="status">Loading sessions…</p>}
