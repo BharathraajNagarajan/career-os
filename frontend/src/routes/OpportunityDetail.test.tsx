@@ -59,9 +59,7 @@ describe("OpportunityDetail", () => {
 
     renderPage(<OpportunityDetail />, ROUTE);
 
-    expect(
-      await screen.findByRole("heading", { name: "Senior Widget Engineer" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Senior Widget Engineer" })).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toHaveValue("Senior Widget Engineer");
     expect(screen.getByLabelText("Team")).toHaveValue("Platform");
     expect(screen.getByLabelText("Job ID")).toHaveValue("EX-1001");
@@ -178,9 +176,7 @@ describe("OpportunityDetail", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Title")).toHaveValue("Changed elsewhere");
     });
-    expect(server.calls.filter((call) => call.url === BASE && call.method === "GET").length).toBe(
-      2,
-    );
+    expect(server.calls.filter((call) => call.url === BASE && call.method === "GET").length).toBe(2);
   });
 
   it("explains a job ID that another posting already uses", async () => {

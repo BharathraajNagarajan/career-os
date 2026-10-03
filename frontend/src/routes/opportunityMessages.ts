@@ -57,9 +57,7 @@ export function extractionMessage(status: string, code: string | null): string {
     return "Extracting fields from the job description…";
   }
   if (status === "failed") {
-    return (
-      EXTRACTION_ERRORS[code ?? ""] ?? "Extraction failed, so nothing was filled in. You can retry."
-    );
+    return EXTRACTION_ERRORS[code ?? ""] ?? "Extraction failed, so nothing was filled in. You can retry.";
   }
   return "Extraction finished.";
 }
