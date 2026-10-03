@@ -120,4 +120,4 @@ Logs hold ids, counts, statuses and error codes only (`opportunity_id`, `run_id`
 
 ## Not in this task
 
-Company merge; any URL fetching (T17); Save, Skip, Apply and Close and the Application they create (Task 7); evaluation, staleness display and `latest_evaluation_id`'s foreign key (Task 11); polished design (Task 10). Only the initial `new` status is ever written.
+Company merge; any URL fetching (T17); evaluation, staleness display and `latest_evaluation_id`'s foreign key (Task 11); polished design (Task 10). Save, Skip, Apply and Close and the Application they create arrived in Task 7: see [state-machines.md](state-machines.md).
