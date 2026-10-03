@@ -43,7 +43,7 @@ def upgrade() -> None:
         timestamp("updated_at"),
         sa.CheckConstraint(
             "stage IN ('applied', 'assessment', 'interviewing', 'offer', 'rejected', "
-            f"'withdrawn', 'accepted', 'declined', 'no_response')",
+            "'withdrawn', 'accepted', 'declined', 'no_response')",
             name=op.f("ck_applications_stage"),
         ),
         sa.CheckConstraint(
