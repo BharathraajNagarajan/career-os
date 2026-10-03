@@ -21,7 +21,7 @@ ModelProvider protocol ── FakeProvider (default, tests)
 - The gateway core imports only its own `llm_runs` repository, configuration, logging and the tenancy helpers. It cannot import `app.auth.tokens`, session or credential modules, or any other repository (INV-11). The same test checks `app/llm` and `app/review` with an import allowlist; it also proves the checker catches a forbidden import. `router.py` is the HTTP layer and may import auth dependencies.
 - No model id or price appears in Python. A test scans `app/` for vendor model names.
 - `structured(...)` returns a `StructuredResult` (validated object, `run_id`, whether a repair was needed). The `run_id` exists so producers can store provenance (`review_items.llm_run_id`). `stream(...)` returns a `ModelStream` that yields text deltas, exposes `run_id` and `usage` when finished, and settles when exhausted or closed (use it as a context manager).
-- INV-17: every call names a purpose from the spec's closed list, and the gateway refuses a call whose purpose or tier differs from the registered prompt's. This task adds no endpoint, job or scheduler that calls a model.
+- INV-17: every call names a purpose from the spec's closed list, and the gateway refuses a call whose purpose or tier differs from the registered prompt's. Task 5 added no caller; the first is the `extract_jd` job of Task 6 ([opportunities.md](opportunities.md)), started only by a pasted job description or an explicit retry.
 
 ## Configuration
 
@@ -44,7 +44,7 @@ Prompts are code (`app/llm/prompts/`). A `Prompt` has an id, a version, a purpos
 
 Changing a prompt means a new version. `prompts.lock.json` records each registered `(id, version)` with a SHA-256 over its purpose, tier, templates, JSON schema and untrusted variables. A test fails if the registered content no longer matches the lock, so editing text without bumping the version cannot pass CI. After a deliberate change, add the new version and run `uv run python -m app.llm.prompts.lock`.
 
-This task ships two generic self-test prompts (a tone label for a synthetic note, and a polite reply) so the gateway can be exercised. They borrow the `classify_email` and `chat` purposes because the purpose list is closed by the spec; they are replaced as real prompts arrive in Tasks 6 and 9.
+This task ships two generic self-test prompts (a tone label for a synthetic note, and a polite reply) so the gateway can be exercised. They borrow the `classify_email` and `chat` purposes because the purpose list is closed by the spec; real prompts arrive with their tasks: `jd.extract` (purpose `extract_jd`, tier `fast`, untrusted variable `jd`) in Task 6, resume extraction in Task 9.
 
 ## Untrusted content (T3)
 
@@ -105,4 +105,4 @@ CI uses the fake provider and needs no secrets. An autouse fixture makes `socket
 
 ## Deferred
 
-Prompt caching, model fallbacks and refusal fallbacks, retries beyond the single repair call (the SDK's own retries are disabled so cost accounting stays exact), batch calls, per-purpose caps, automatic release of stale reservations, a budget indicator next to AI actions (Task 10) and any real prompt (Tasks 6 and 9).
+Prompt caching, model fallbacks and refusal fallbacks, retries beyond the single repair call (the SDK's own retries are disabled so cost accounting stays exact), batch calls, per-purpose caps, automatic release of stale reservations, a budget indicator next to AI actions (Task 10) and resume-extraction and later prompts (Task 9 onward).

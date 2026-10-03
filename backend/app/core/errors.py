@@ -11,6 +11,7 @@ from app.llm.errors import LlmBudgetExhausted
 class ErrorBody(BaseModel):
     code: str
     resume_id: uuid.UUID | None = None
+    opportunity_id: uuid.UUID | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -25,25 +26,35 @@ class ApiError(Exception):
         *,
         delete_cookies: tuple[tuple[str, str], ...] = (),
         resume_id: uuid.UUID | None = None,
+        opportunity_id: uuid.UUID | None = None,
     ) -> None:
         super().__init__(code)
         self.status_code = status_code
         self.code = code
         self.delete_cookies = delete_cookies
         self.resume_id = resume_id
+        self.opportunity_id = opportunity_id
 
 
 def error_response(
-    status_code: int, code: str, *, resume_id: uuid.UUID | None = None
+    status_code: int,
+    code: str,
+    *,
+    resume_id: uuid.UUID | None = None,
+    opportunity_id: uuid.UUID | None = None,
 ) -> JSONResponse:
-    body = ErrorResponse(error=ErrorBody(code=code, resume_id=resume_id))
+    body = ErrorResponse(
+        error=ErrorBody(code=code, resume_id=resume_id, opportunity_id=opportunity_id)
+    )
     return JSONResponse(body.model_dump(mode="json", exclude_none=True), status_code)
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
-        response = error_response(exc.status_code, exc.code, resume_id=exc.resume_id)
+        response = error_response(
+            exc.status_code, exc.code, resume_id=exc.resume_id, opportunity_id=exc.opportunity_id
+        )
         for name, path in exc.delete_cookies:
             response.delete_cookie(name, path=path)
         return response

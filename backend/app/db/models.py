@@ -153,6 +153,56 @@ class ReviewStatus(StrEnum):
     EXPIRED = "expired"
 
 
+class CompanyOrigin(StrEnum):
+    USER = "user"
+    EXTRACTED = "extracted"
+
+
+class Priority(StrEnum):
+    HIGH = "high"
+    NORMAL = "normal"
+    LOW = "low"
+
+
+class OpportunityStatus(StrEnum):
+    NEW = "new"
+    SAVED = "saved"
+    SKIPPED = "skipped"
+    APPLIED = "applied"
+    CLOSED = "closed"
+
+
+class WorkplaceType(StrEnum):
+    ONSITE = "onsite"
+    HYBRID = "hybrid"
+    REMOTE = "remote"
+    UNSPECIFIED = "unspecified"
+
+
+class OpportunitySource(StrEnum):
+    MANUAL_PASTE = "manual_paste"
+
+
+class QualificationKind(StrEnum):
+    MINIMUM = "minimum"
+    PREFERRED = "preferred"
+
+
+class QualificationCategory(StrEnum):
+    SKILL = "skill"
+    EXPERIENCE = "experience"
+    EDUCATION = "education"
+    DOMAIN = "domain"
+    AUTHORIZATION = "authorization"
+    LOCATION = "location"
+    OTHER = "other"
+
+
+class QualificationOrigin(StrEnum):
+    EXTRACTED = "extracted"
+    USER = "user"
+
+
 class User(HasId, HasCreatedAt, Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -420,6 +470,115 @@ class ReviewItem(UserOwned, StateVersioned, HasCreatedAt, Base):
     llm_run_id: Mapped[uuid.UUID | None]
     decided_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     decision_note: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Company(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "companies"
+    __table_args__ = owned_table_args(
+        enum_check("strategic_priority", Priority),
+        enum_check("origin", CompanyOrigin),
+        UniqueConstraint("user_id", "normalized_name"),
+        CheckConstraint("normalized_name <> ''", name="normalized_name_not_empty"),
+    )
+
+    name: Mapped[str] = mapped_column(Text)
+    normalized_name: Mapped[str] = mapped_column(Text)
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'::text[]"))
+    domains: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'::text[]"))
+    careers_url: Mapped[str | None] = mapped_column(Text)
+    strategic_priority: Mapped[Priority] = mapped_column(
+        TextEnum(Priority), server_default=Priority.NORMAL.value
+    )
+    notes: Mapped[str] = mapped_column(Text, server_default="")
+    origin: Mapped[CompanyOrigin] = mapped_column(TextEnum(CompanyOrigin))
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Opportunity(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "opportunities"
+    __table_args__ = owned_table_args(
+        enum_check("status", OpportunityStatus),
+        enum_check("priority", Priority),
+        enum_check("extraction_status", ExtractionStatus),
+        enum_check("workplace_type", WorkplaceType),
+        enum_check("source", OpportunitySource),
+        owned_fk("company_id", "companies"),
+        owned_fk("jd_artifact_id", "artifacts"),
+        owned_fk("llm_run_id", "llm_runs"),
+        UniqueConstraint("jd_artifact_id"),
+        CheckConstraint(
+            "(extraction_status = 'failed') = (extraction_error_code IS NOT NULL)",
+            name="extraction_error_consistent",
+        ),
+        CheckConstraint("jsonb_typeof(locations) = 'object'", name="locations_object"),
+        Index(
+            "uq_opportunities_company_external_job_id",
+            "user_id",
+            "company_id",
+            "external_job_id",
+            unique=True,
+            postgresql_where=text("external_job_id IS NOT NULL AND company_id IS NOT NULL"),
+        ),
+        Index("ix_opportunities_user_id_discovered_at", "user_id", "discovered_at"),
+        Index("ix_opportunities_user_id_company_id", "user_id", "company_id"),
+    )
+
+    company_id: Mapped[uuid.UUID | None]
+    title: Mapped[str | None] = mapped_column(Text)
+    team: Mapped[str | None] = mapped_column(Text)
+    external_job_id: Mapped[str | None] = mapped_column(Text)
+    location_text: Mapped[str | None] = mapped_column(Text)
+    locations: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    workplace_type: Mapped[WorkplaceType] = mapped_column(
+        TextEnum(WorkplaceType), server_default=WorkplaceType.UNSPECIFIED.value
+    )
+    source: Mapped[OpportunitySource] = mapped_column(TextEnum(OpportunitySource))
+    source_url: Mapped[str | None] = mapped_column(Text)
+    jd_artifact_id: Mapped[uuid.UUID]
+    status: Mapped[OpportunityStatus] = mapped_column(
+        TextEnum(OpportunityStatus), server_default=OpportunityStatus.NEW.value
+    )
+    priority: Mapped[Priority] = mapped_column(
+        TextEnum(Priority), server_default=Priority.NORMAL.value
+    )
+    extraction_status: Mapped[ExtractionStatus] = mapped_column(
+        TextEnum(ExtractionStatus), server_default=ExtractionStatus.PENDING.value
+    )
+    extraction_error_code: Mapped[str | None] = mapped_column(Text)
+    llm_run_id: Mapped[uuid.UUID | None]
+    latest_evaluation_id: Mapped[uuid.UUID | None]
+    content_updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    discovered_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Qualification(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "qualifications"
+    __table_args__ = owned_table_args(
+        enum_check("kind", QualificationKind),
+        enum_check("category", QualificationCategory),
+        enum_check("origin", QualificationOrigin),
+        owned_fk("opportunity_id", "opportunities"),
+        owned_fk("llm_run_id", "llm_runs"),
+        CheckConstraint("ordinal >= 0", name="ordinal_nonnegative"),
+        CheckConstraint(
+            "char_length(text_verbatim) BETWEEN 1 AND 2000", name="text_verbatim_length"
+        ),
+        CheckConstraint("min_years IS NULL OR min_years BETWEEN 0 AND 50", name="min_years_range"),
+        Index("ix_qualifications_user_id_opportunity_id", "user_id", "opportunity_id"),
+    )
+
+    opportunity_id: Mapped[uuid.UUID]
+    kind: Mapped[QualificationKind] = mapped_column(TextEnum(QualificationKind))
+    ordinal: Mapped[int]
+    text_verbatim: Mapped[str] = mapped_column(Text)
+    category: Mapped[QualificationCategory] = mapped_column(TextEnum(QualificationCategory))
+    skill_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'::text[]"))
+    min_years: Mapped[int | None]
+    is_hard_constraint: Mapped[bool] = mapped_column(server_default=text("false"))
+    origin: Mapped[QualificationOrigin] = mapped_column(TextEnum(QualificationOrigin))
+    llm_run_id: Mapped[uuid.UUID | None]
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 

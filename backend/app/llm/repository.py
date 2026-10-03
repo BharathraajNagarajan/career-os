@@ -44,6 +44,33 @@ class LlmRunRepository(UserScopedRepository[LlmRun]):
         ).scalar_one()
         return Decimal(spent)
 
+    def find_settled_structured(
+        self,
+        *,
+        user_id: uuid.UUID,
+        purpose: LlmPurpose,
+        prompt_id: str,
+        artifact_id: uuid.UUID,
+        exclude_run_id: uuid.UUID | None,
+    ) -> LlmRun | None:
+        statement = (
+            select(LlmRun)
+            .where(
+                LlmRun.user_id == require_user_id(user_id),
+                LlmRun.purpose == purpose,
+                LlmRun.prompt_id == prompt_id,
+                LlmRun.status == LlmRunStatus.SUCCEEDED,
+                LlmRun.context_manifest.contains(
+                    {"entries": [{"entity_type": "artifact", "entity_id": str(artifact_id)}]}
+                ),
+            )
+            .order_by(LlmRun.created_at.desc(), LlmRun.id.desc())
+            .limit(1)
+        )
+        if exclude_run_id is not None:
+            statement = statement.where(LlmRun.id != exclude_run_id)
+        return self.session.scalars(statement).first()
+
     def create_reserved(
         self,
         *,

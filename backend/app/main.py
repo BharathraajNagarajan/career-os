@@ -17,6 +17,7 @@ from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from app.llm.router import router as llm_router
+from app.opportunities.router import router as opportunities_router
 from app.profile.router import router as profile_router
 from app.resumes.router import router as resumes_router
 from app.review.handlers import ReviewHandlerRegistry
@@ -73,6 +74,7 @@ def create_app(
     app.include_router(resumes_router)
     app.include_router(llm_router)
     app.include_router(review_router)
+    app.include_router(opportunities_router)
 
     get_logger(__name__).info(
         "api_configured", environment=settings.environment.value, version=__version__

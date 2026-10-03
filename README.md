@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 3 (authentication: Google sign-in, sessions, CSRF, account deletion; builds on the Task 2 database foundation). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 6 (JD ingestion, extraction, companies, duplicates and priorities; builds on the model gateway of Task 5). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -104,6 +104,13 @@ Settings come only from environment variables; the application never reads a `.e
 | `RESUME_MAX_PAGES` | `10` | Largest accepted PDF page count; more pages fail parsing with `too_many_pages` |
 | `PARSE_TIMEOUT_SECONDS` | `30` | Hard limit for the resume parsing child process; exceeding it fails parsing with `parse_timeout` |
 | `EXTRACTED_TEXT_MAX_CHARS` | `200000` | Extracted resume text is truncated to this many characters |
+| `JD_MIN_CHARS` | `200` | Shortest accepted pasted job description (after trimming); shorter gets 422 `jd_too_short` |
+| `JD_MAX_CHARS` | `50000` | Longest accepted pasted job description (at most 200000); longer gets 422 `jd_too_long` |
+| `JD_EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output ceiling for the one extraction call per pasted job description |
+
+## Opportunities and job descriptions
+
+Paste a job description on the Opportunities page (optionally with the source URL, which is stored and shown as text but never fetched). The text is kept as an immutable artifact, and the pasting itself authorizes one model call that extracts the company, title, team, job ID, location, workplace type and the requirement lines. Each requirement keeps the posting's exact wording (anything the model invented is dropped), and every extracted value stays editable; extraction only fills fields that are still empty and never retries by itself. Companies are matched by domain, name or alias, possible duplicates are listed on each posting, and priority is yours to set on postings and companies. With the default fake provider the extraction returns placeholder values, so no real call is made. See [docs/architecture/opportunities.md](docs/architecture/opportunities.md).
 
 ## Database, migrations and database tests
 
@@ -133,7 +140,7 @@ One profile per user (constraints, target roles, communication preferences), imm
 
 ## Model gateway and review items
 
-All model work goes through one internal gateway: tiers and prices from configuration, versioned prompts, a recorded `llm_runs` row per call, one repair retry for invalid structured output, and a per-user daily cost cap that reserves the worst case before a call and settles the real cost after. The review framework holds proposals until the user confirms, edits or rejects them, and confirming runs the same command a manual action would. Nothing in the app calls a model yet; the first producers arrive with JD ingestion and resume extraction. See [docs/architecture/llm.md](docs/architecture/llm.md) and [docs/architecture/review.md](docs/architecture/review.md). The Anthropic placeholders in `.env.example` are commented out; copy them in only when you want a real call.
+All model work goes through one internal gateway: tiers and prices from configuration, versioned prompts, a recorded `llm_runs` row per call, one repair retry for invalid structured output, and a per-user daily cost cap that reserves the worst case before a call and settles the real cost after. The review framework holds proposals until the user confirms, edits or rejects them, and confirming runs the same command a manual action would. The first producer is JD extraction (below); resume extraction arrives in Task 9. See [docs/architecture/llm.md](docs/architecture/llm.md) and [docs/architecture/review.md](docs/architecture/review.md). The Anthropic placeholders in `.env.example` are commented out; copy them in only when you want a real call.
 
 ## Logging
 
