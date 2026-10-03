@@ -36,6 +36,7 @@ class ModelPrice(BaseModel):
     output_usd_per_mtok: Decimal = Field(ge=0)
 
 
+JD_MAX_CHARS_CEILING = 200_000
 FAKE_FAST_MODEL = "fake-fast"
 FAKE_REASONING_MODEL = "fake-reasoning"
 
@@ -65,6 +66,15 @@ class Settings(BaseAppSettings):
     resume_max_pages: int = Field(default=10, gt=0)
     parse_timeout_seconds: float = Field(default=30.0, gt=0)
     extracted_text_max_chars: int = Field(default=200_000, gt=0)
+    jd_min_chars: int = Field(default=200, ge=1)
+    jd_max_chars: int = Field(default=50_000, gt=0, le=JD_MAX_CHARS_CEILING)
+    jd_extraction_max_output_tokens: int = Field(default=6000, gt=0)
+
+    @model_validator(mode="after")
+    def _check_jd_limits(self) -> Self:
+        if self.jd_min_chars > self.jd_max_chars:
+            raise ValueError("JD_MIN_CHARS must not exceed JD_MAX_CHARS")
+        return self
 
     @model_validator(mode="after")
     def _check_llm_configuration(self) -> Self:
