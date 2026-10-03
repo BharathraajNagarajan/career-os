@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 
 from app.db.models import LlmPurpose, LlmTier
+from app.llm.prompts.jd_extract import (
+    JD_EXTRACT,
+    JD_EXTRACT_SYSTEM,
+    JD_EXTRACT_USER,
+    JdExtraction,
+)
 from app.llm.prompts.registry import Prompt, PromptRegistry
 
 SELFTEST_STRUCTURED = "selftest.note_tone"
@@ -37,6 +43,18 @@ def default_registry() -> PromptRegistry:
             tier=LlmTier.FAST,
             system="You answer briefly and politely.",
             user="$question",
+        )
+    )
+    registry.register(
+        Prompt(
+            prompt_id=JD_EXTRACT,
+            version=1,
+            purpose=LlmPurpose.EXTRACT_JD,
+            tier=LlmTier.FAST,
+            system=JD_EXTRACT_SYSTEM,
+            user=JD_EXTRACT_USER,
+            output_schema=JdExtraction,
+            untrusted_variables=frozenset({"jd"}),
         )
     )
     return registry

@@ -49,6 +49,8 @@ ALLOWED_FIELDS = frozenset(
         "latency_ms",
         "review_item_id",
         "proposal_type",
+        "opportunity_id",
+        "dropped_count",
     }
 )
 

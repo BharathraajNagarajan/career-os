@@ -13,6 +13,7 @@ from app.core.logging import configure_logging, get_logger
 from app.jobs.handlers import register_job_handlers
 from app.jobs.registry import job_registry
 from app.jobs.runner import JobRunner
+from app.llm.factory import build_gateway
 
 log = get_logger(__name__)
 
@@ -67,13 +68,15 @@ def main() -> None:
     stop = threading.Event()
     install_signal_handlers(stop)
     worker_id = worker_identity()
+    engine = create_db_engine(settings.database_url)
+    sessions = session_factory(engine)
     register_job_handlers(
         job_registry,
         storage=FilesystemStorage(settings.artifact_storage_dir),
         settings=settings,
+        gateway=build_gateway(settings, sessions),
     )
-    engine = create_db_engine(settings.database_url)
-    runner = JobRunner(session_factory(engine), job_registry, settings, worker_id)
+    runner = JobRunner(sessions, job_registry, settings, worker_id)
     try:
         run(settings, stop, runner.run_once, worker_id=worker_id)
     finally:
