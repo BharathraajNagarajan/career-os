@@ -105,7 +105,7 @@ None. Where the brief and the spec differ, the spec was followed:
 ## Unresolved issues
 
 - The missing Skip reason in the owner's data could not be reproduced (see finding 2). The existing row stays as recorded; the request evidently carried no reason.
-- Re-applying after a terminal application is not possible through Apply (spec 5.2: Applied stays Applied); the correction path is Reopen.
+- True re-application after a terminal Application is not implemented in Task 7. APPLICATION_REOPENED corrects or reopens the existing Application; it is not a new application attempt. The frozen spec separately permits a new Application row when the same posting is genuinely reopened. The command and UI flow for that case remain unimplemented and are not part of the Task 7 acceptance criteria.
 - Events dated before the applied date are overridden by the submission (see above). There is no UI warning; Task 10 can add one.
 
 ## Git state

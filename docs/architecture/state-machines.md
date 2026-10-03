@@ -26,7 +26,7 @@ Commands: `save`, `skip`, `apply`, `close`. Any pair not listed is refused with 
 
 Each transition writes one `OPPORTUNITY_DECIDED` event (payload: `decision`, `from_status`, `to_status`, optional `reason` of at most 500 characters). Apply additionally writes `APPLICATION_SUBMITTED` on the new application. Decisions change `status` and `state_version` only; they never move `content_updated_at`, so they do not make an Evaluation stale (6.2c). `allowed_actions` on every opportunity response is computed from this table, so the UI never copies the rules.
 
-After a terminal application the Opportunity cannot be applied to again (spec 5.2: "Applied stays Applied"). Correcting a mistaken terminal event is Reopen, not a second Apply. The partial unique index below still allows a second application row for an opportunity once the first is terminal, which is the shape a confirmed Gmail ReviewItem needs later.
+The current Opportunity machine keeps Applied as Applied (spec 5.2), so after a terminal application the Opportunity cannot be applied to again through Apply. Reopen is a correction of the existing Application's history (`APPLICATION_REOPENED`); it is not a re-application and does not start a new attempt. A genuine re-application to a reopened posting may create a new Application row, which the frozen spec permits (section 1.6: a new row on the same opportunity only if the same posting is reopened). The partial unique index below already allows that second row once the earlier one is terminal. The command and UI flow for that case is deferred and is not part of the Task 7 acceptance criteria.
 
 ### Application (spec 5.1)
 
