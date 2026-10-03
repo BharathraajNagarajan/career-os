@@ -25,6 +25,7 @@ import type {
   Qualification,
   WorkplaceType,
 } from "../api/opportunities";
+import { ApplicationSection, DecisionPanel } from "./OpportunityWorkflow";
 import {
   CONFLICT_MESSAGE,
   editErrorMessage,
@@ -672,6 +673,9 @@ export function OpportunityDetail() {
         </label>
       </p>
       {priority.isError && <p role="alert">Could not change the priority.</p>}
+
+      <DecisionPanel detail={data} />
+      <ApplicationSection opportunityId={data.id} />
 
       {data.source_url !== null && (
         <p>

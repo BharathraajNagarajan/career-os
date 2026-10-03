@@ -106,3 +106,30 @@ export async function patchQualification(
 export async function deleteQualification(id: string): Promise<void> {
   await apiFetch(`/api/v1/qualifications/${id}`, { method: "DELETE" });
 }
+
+export type OpportunityAction = Schemas["OpportunityCommand"];
+
+export async function decideOpportunity(
+  detail: OpportunityDetail,
+  action: "save" | "skip" | "close",
+  reason: string | null,
+): Promise<OpportunityDetail> {
+  return readJson(
+    await apiFetch(`/api/v1/opportunities/${detail.id}/${action}`, {
+      method: "POST",
+      json: { expected_state_version: detail.state_version, reason },
+    }),
+  );
+}
+
+export async function applyToOpportunity(
+  detail: OpportunityDetail,
+  body: Omit<Schemas["ApplyRequest"], "expected_state_version">,
+): Promise<Schemas["ApplyResponse"]> {
+  return readJson(
+    await apiFetch(`/api/v1/opportunities/${detail.id}/apply`, {
+      method: "POST",
+      json: { expected_state_version: detail.state_version, ...body },
+    }),
+  );
+}

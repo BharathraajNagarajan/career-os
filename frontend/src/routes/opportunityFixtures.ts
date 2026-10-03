@@ -1,4 +1,5 @@
 import type { Company } from "../api/companies";
+import type { Application, TimelineEntry } from "../api/applications";
 import type { Opportunity, OpportunityDetail, Qualification } from "../api/opportunities";
 
 export function summary(overrides: Partial<Opportunity> = {}): Opportunity {
@@ -16,6 +17,7 @@ export function summary(overrides: Partial<Opportunity> = {}): Opportunity {
     content_updated_at: "2026-01-01T00:00:00Z",
     discovered_at: "2026-01-01T00:00:00Z",
     state_version: 2,
+    allowed_actions: ["save", "skip", "apply", "close"],
     ...overrides,
   };
 }
@@ -65,6 +67,50 @@ export function company(overrides: Partial<Company> = {}): Company {
     origin: "extracted",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+export function application(overrides: Partial<Application> = {}): Application {
+  return {
+    id: "app-1",
+    opportunity_id: "opp-1",
+    opportunity_title: "Senior Widget Engineer",
+    company_name: "Example Corp",
+    resume_id: null,
+    lane_id: null,
+    applied_at: "2026-01-02T10:00:00Z",
+    channel: "company_site",
+    stage: "applied",
+    is_terminal: false,
+    state_version: 1,
+    recordable_event_types: [
+      "APPLICATION_ACKNOWLEDGED",
+      "ASSESSMENT_RECEIVED",
+      "INTERVIEW_SCHEDULED",
+      "REJECTED",
+      "WITHDRAWN",
+      "NOTE_ADDED",
+    ],
+    created_at: "2026-01-02T10:00:00Z",
+    updated_at: "2026-01-02T10:00:00Z",
+    ...overrides,
+  };
+}
+
+export function entry(overrides: Partial<TimelineEntry> = {}): TimelineEntry {
+  return {
+    id: "event-1",
+    aggregate_type: "application",
+    aggregate_id: "app-1",
+    event_type: "NOTE_ADDED",
+    occurred_at: "2026-01-03T10:00:00Z",
+    recorded_at: "2026-01-03T10:00:00Z",
+    actor: "user",
+    voided: false,
+    voids_event_id: null,
+    note: null,
+    voidable: true,
     ...overrides,
   };
 }

@@ -27,6 +27,12 @@ function serve(initial: Detail, mutate?: Mutation, duplicates: DuplicateMatch[] 
     if (call.method === "GET" && call.url === `${BASE}/duplicates`) {
       return jsonResponse(server.duplicates);
     }
+    if (call.method === "GET" && call.url === `${BASE}/timeline`) {
+      return jsonResponse([]);
+    }
+    if (call.method === "GET" && call.url.startsWith("/api/v1/applications")) {
+      return jsonResponse([]);
+    }
     if (call.method === "GET" && call.url === "/api/v1/companies") {
       return jsonResponse([company(), company({ id: "company-2", name: "Other Corp" })]);
     }
@@ -53,7 +59,9 @@ describe("OpportunityDetail", () => {
 
     renderPage(<OpportunityDetail />, ROUTE);
 
-    expect(await screen.findByRole("heading", { name: "Senior Widget Engineer" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Senior Widget Engineer" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toHaveValue("Senior Widget Engineer");
     expect(screen.getByLabelText("Team")).toHaveValue("Platform");
     expect(screen.getByLabelText("Job ID")).toHaveValue("EX-1001");
@@ -170,7 +178,9 @@ describe("OpportunityDetail", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Title")).toHaveValue("Changed elsewhere");
     });
-    expect(server.calls.filter((call) => call.url === BASE && call.method === "GET").length).toBe(2);
+    expect(server.calls.filter((call) => call.url === BASE && call.method === "GET").length).toBe(
+      2,
+    );
   });
 
   it("explains a job ID that another posting already uses", async () => {

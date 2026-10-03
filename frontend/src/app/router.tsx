@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import { Applications } from "../routes/Applications";
 import { Companies } from "../routes/Companies";
 import { HomePlaceholder } from "../routes/HomePlaceholder";
 import { Lanes } from "../routes/Lanes";
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
           { path: "lanes", element: <Lanes /> },
           { path: "opportunities", element: <Opportunities /> },
           { path: "opportunities/:opportunityId", element: <OpportunityDetail /> },
+          { path: "applications", element: <Applications /> },
           { path: "companies", element: <Companies /> },
           { path: "review", element: <Review /> },
           { path: "settings", element: <Settings /> },
