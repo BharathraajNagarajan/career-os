@@ -203,6 +203,46 @@ class QualificationOrigin(StrEnum):
     USER = "user"
 
 
+class ApplicationStage(StrEnum):
+    APPLIED = "applied"
+    ASSESSMENT = "assessment"
+    INTERVIEWING = "interviewing"
+    OFFER = "offer"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    NO_RESPONSE = "no_response"
+
+
+TERMINAL_STAGES = frozenset(
+    {
+        ApplicationStage.REJECTED,
+        ApplicationStage.WITHDRAWN,
+        ApplicationStage.ACCEPTED,
+        ApplicationStage.DECLINED,
+        ApplicationStage.NO_RESPONSE,
+    }
+)
+
+
+class ApplicationChannel(StrEnum):
+    COMPANY_SITE = "company_site"
+    JOB_BOARD = "job_board"
+    REFERRAL = "referral"
+    RECRUITER = "recruiter"
+    EMAIL = "email"
+    OTHER = "other"
+
+
+class RecruitingActionStatus(StrEnum):
+    OPEN = "open"
+    SNOOZED = "snoozed"
+    DONE = "done"
+    DISMISSED = "dismissed"
+    SUPERSEDED = "superseded"
+
+
 class User(HasId, HasCreatedAt, Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -579,6 +619,44 @@ class Qualification(UserOwned, HasCreatedAt, Base):
     is_hard_constraint: Mapped[bool] = mapped_column(server_default=text("false"))
     origin: Mapped[QualificationOrigin] = mapped_column(TextEnum(QualificationOrigin))
     llm_run_id: Mapped[uuid.UUID | None]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Application(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "applications"
+    __table_args__ = owned_table_args(
+        enum_check("stage", ApplicationStage),
+        enum_check("channel", ApplicationChannel),
+        owned_fk("opportunity_id", "opportunities"),
+        owned_fk("resume_id", "resumes"),
+        owned_fk("lane_id", "resume_lanes"),
+        CheckConstraint(
+            "is_terminal = (stage IN ('rejected', 'withdrawn', 'accepted', 'declined', "
+            "'no_response'))",
+            name="terminal_matches_stage",
+        ),
+        Index(
+            "uq_applications_open_per_opportunity",
+            "user_id",
+            "opportunity_id",
+            unique=True,
+            postgresql_where=text("NOT is_terminal"),
+        ),
+        Index("ix_applications_user_id_opportunity_id", "user_id", "opportunity_id"),
+        Index("ix_applications_user_id_applied_at", "user_id", "applied_at"),
+    )
+
+    opportunity_id: Mapped[uuid.UUID]
+    resume_id: Mapped[uuid.UUID | None]
+    lane_id: Mapped[uuid.UUID | None]
+    applied_at: Mapped[datetime]
+    channel: Mapped[ApplicationChannel] = mapped_column(
+        TextEnum(ApplicationChannel), server_default=ApplicationChannel.OTHER.value
+    )
+    stage: Mapped[ApplicationStage] = mapped_column(
+        TextEnum(ApplicationStage), server_default=ApplicationStage.APPLIED.value
+    )
+    is_terminal: Mapped[bool] = mapped_column(server_default=text("false"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
