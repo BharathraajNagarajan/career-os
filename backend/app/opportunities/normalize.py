@@ -82,3 +82,10 @@ def clamp_min_years(value: float | None) -> int | None:
     if value is None or value != value:
         return None
     return max(0, min(MIN_YEARS_CEILING, round(value)))
+
+
+def clean_note(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "").strip()
+    return cleaned or None

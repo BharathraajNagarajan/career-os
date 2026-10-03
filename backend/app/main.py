@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import __version__
+from app.applications.router import router as applications_router
 from app.artifacts.storage import FilesystemStorage, StorageAdapter
 from app.auth.oidc import IdentityProvider
 from app.auth.router import router as auth_router
@@ -75,6 +76,7 @@ def create_app(
     app.include_router(llm_router)
     app.include_router(review_router)
     app.include_router(opportunities_router)
+    app.include_router(applications_router)
 
     get_logger(__name__).info(
         "api_configured", environment=settings.environment.value, version=__version__

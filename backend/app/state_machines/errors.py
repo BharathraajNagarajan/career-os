@@ -39,3 +39,8 @@ class NotTerminal(TransitionError):
 class SnoozeNotInFuture(TransitionError):
     code = "snooze_not_in_future"
     status_code = 422
+
+
+class OccurredAtInFuture(TransitionError):
+    code = "occurred_at_in_future"
+    status_code = 422

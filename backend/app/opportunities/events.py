@@ -1,11 +1,13 @@
 import uuid
 from datetime import UTC, datetime
 
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from app.db.models import Actor, AggregateType
 from app.events.payloads import EventPayload, payload_registry
 from app.events.repository import DomainEventRepository
+from app.state_machines.opportunity import OPPORTUNITY_DECIDED
 
 OPPORTUNITY_INGESTED = "OPPORTUNITY_INGESTED"
 OPPORTUNITY_EXTRACTED = "OPPORTUNITY_EXTRACTED"
@@ -46,6 +48,15 @@ class OpportunityPriorityChanged(EventPayload):
     to_priority: str
 
 
+class OpportunityDecided(EventPayload):
+    schema_version: int = 1
+    opportunity_id: uuid.UUID
+    decision: str
+    from_status: str
+    to_status: str
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class CompanyCreated(EventPayload):
     schema_version: int = 1
     company_id: uuid.UUID
@@ -64,6 +75,7 @@ for event_type, model in (
     (OPPORTUNITY_EXTRACTED, OpportunityExtracted),
     (OPPORTUNITY_CONTENT_EDITED, OpportunityContentEdited),
     (OPPORTUNITY_PRIORITY_CHANGED, OpportunityPriorityChanged),
+    (OPPORTUNITY_DECIDED, OpportunityDecided),
     (COMPANY_CREATED, CompanyCreated),
     (COMPANY_PRIORITY_CHANGED, CompanyPriorityChanged),
 ):

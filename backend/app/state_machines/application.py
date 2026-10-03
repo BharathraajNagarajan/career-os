@@ -69,6 +69,14 @@ TERMINAL_EVENTS = frozenset(
 )
 
 
+def recordable_event_types(is_terminal: bool) -> list[ApplicationEventType]:
+    return [
+        event
+        for event in ApplicationEventType
+        if event in RECORDABLE and not (is_terminal and event in TERMINAL_EVENTS)
+    ]
+
+
 @dataclass(frozen=True)
 class EventRecord:
     id: uuid.UUID
