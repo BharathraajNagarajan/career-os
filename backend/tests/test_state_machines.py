@@ -1,7 +1,9 @@
+import ast
 import itertools
 import random
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -486,3 +488,28 @@ def test_typed_errors_have_stable_codes_and_statuses() -> None:
     }
     for error, (status, code) in codes.items():
         assert (error.status_code, error.code) == (status, code)
+
+
+def test_state_machine_modules_stay_pure() -> None:
+    root = Path(__file__).resolve().parents[1] / "app" / "state_machines"
+    allowed_models = {
+        "Actor",
+        "ApplicationStage",
+        "OpportunityStatus",
+        "RecruitingActionStatus",
+        "TERMINAL_STAGES",
+    }
+    for path in sorted(root.glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules = [node.module]
+                if node.module == "app.db.models":
+                    assert {alias.name for alias in node.names} <= allowed_models, path.name
+            else:
+                continue
+            for module in modules:
+                top = module.split(".")[0]
+                assert top in {"app", "uuid", "collections", "dataclasses", "datetime", "enum"}
+                assert not module.startswith(("app.core", "app.auth", "app.events", "app.jobs"))
