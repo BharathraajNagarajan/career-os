@@ -14,6 +14,7 @@ from starlette.routing import Route
 from tests.auth.fake_idp import FakeIdentityProvider
 from tests.db.auth_helpers import Persona, make_persona, new_client
 from tests.db.llm_helpers import VALID, make_gateway, structured
+from tests.db.opportunity_helpers import jd_variant
 from tests.db.resume_helpers import create_lane, upload
 from tests.db.review_helpers import create_item
 from tests.synthetic import synthetic_pdf
@@ -113,6 +114,52 @@ def assert_a_review_item_untouched(personas: Personas) -> None:
     assert body["state_version"] == 1
     assert body["decided_at"] is None
     assert personas.a.client.get("/api/v1/profile").json()["headline"] == A_HEADLINE
+
+
+A_OPPORTUNITY_TITLE = "Persona A opportunity title"
+A_COMPANY = "Persona A company"
+A_QUALIFICATION = "Persona A qualification line"
+OPPORTUNITIES = "/api/v1/opportunities"
+COMPANIES = "/api/v1/companies"
+QUALIFICATIONS = "/api/v1/qualifications"
+
+
+def opportunity_foreign(personas: Personas) -> dict[str, str]:
+    return {"opportunity_id": personas.a_ids["opportunity"]}
+
+
+def qualification_foreign(personas: Personas) -> dict[str, str]:
+    return {"qualification_id": personas.a_ids["qualification"]}
+
+
+def company_foreign(personas: Personas) -> dict[str, str]:
+    return {"company_id": personas.a_ids["company"]}
+
+
+def assert_a_opportunity_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(OPPORTUNITIES).json()
+    assert [row["id"] for row in listed] == [personas.a_ids["opportunity"]]
+    body = personas.a.client.get(f"{OPPORTUNITIES}/{personas.a_ids['opportunity']}").json()
+    assert body["title"] == A_OPPORTUNITY_TITLE
+    assert body["priority"] == "normal"
+    assert body["status"] == "new"
+    assert body["extraction_status"] == "pending"
+    assert body["state_version"] == int(personas.a_ids["opportunity_version"])
+    assert body["company"] is None
+    assert [item["text_verbatim"] for item in body["qualifications"]] == [A_QUALIFICATION]
+    assert [item["id"] for item in body["qualifications"]] == [personas.a_ids["qualification"]]
+    duplicates = personas.a.client.get(
+        f"{OPPORTUNITIES}/{personas.a_ids['opportunity']}/duplicates"
+    ).json()
+    assert duplicates == []
+    assert_a_company_untouched(personas)
+
+
+def assert_a_company_untouched(personas: Personas) -> None:
+    companies = personas.a.client.get(COMPANIES).json()
+    assert [(row["id"], row["name"], row["strategic_priority"]) for row in companies] == [
+        (personas.a_ids["company"], A_COMPANY, "normal")
+    ]
 
 
 PROTECTED: dict[Route_, IsolationCase] = {
@@ -232,12 +279,111 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=REVIEW_FOREIGN,
         a_untouched=assert_a_review_item_untouched,
     ),
+    ("POST", OPPORTUNITIES + "/ingest"): IsolationCase(
+        OPPORTUNITIES + "/ingest",
+        body={"jd_text": jd_variant("persona b ingest")},
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("GET", OPPORTUNITIES): IsolationCase(
+        OPPORTUNITIES,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["opportunity"]},
+    ),
+    ("GET", OPPORTUNITIES + "/{opportunity_id}"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}",
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("PATCH", OPPORTUNITIES + "/{opportunity_id}"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}",
+        body={"expected_state_version": 1, "title": "hijacked"},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("PATCH", OPPORTUNITIES + "/{opportunity_id}/priority"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/priority",
+        body={"priority": "high"},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/extract"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/extract",
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("GET", OPPORTUNITIES + "/{opportunity_id}/duplicates"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/duplicates",
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("POST", OPPORTUNITIES + "/{opportunity_id}/qualifications"): IsolationCase(
+        OPPORTUNITIES + "/{opportunity_id}/qualifications",
+        body={"kind": "minimum", "text_verbatim": "planted", "category": "skill"},
+        foreign_params=opportunity_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("PATCH", QUALIFICATIONS + "/{qualification_id}"): IsolationCase(
+        QUALIFICATIONS + "/{qualification_id}",
+        body={"kind": "preferred"},
+        foreign_params=qualification_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("DELETE", QUALIFICATIONS + "/{qualification_id}"): IsolationCase(
+        QUALIFICATIONS + "/{qualification_id}",
+        foreign_params=qualification_foreign,
+        a_untouched=assert_a_opportunity_untouched,
+    ),
+    ("GET", COMPANIES): IsolationCase(
+        COMPANIES,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["company"]},
+    ),
+    ("GET", COMPANIES + "/{company_id}"): IsolationCase(
+        COMPANIES + "/{company_id}",
+        foreign_params=company_foreign,
+        a_untouched=assert_a_company_untouched,
+    ),
+    ("POST", COMPANIES): IsolationCase(
+        COMPANIES,
+        body={"name": "Persona B company"},
+        a_untouched=assert_a_company_untouched,
+    ),
+    ("PATCH", COMPANIES + "/{company_id}"): IsolationCase(
+        COMPANIES + "/{company_id}",
+        body={"name": "hijacked", "strategic_priority": "high"},
+        foreign_params=company_foreign,
+        a_untouched=assert_a_company_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
         a_untouched=assert_a_has_session_and_active_status,
     ),
 }
+
+
+def seed_opportunity(persona: Persona, *, title: str, company: str, line: str) -> dict[str, str]:
+    opportunity = persona.request(
+        "POST", OPPORTUNITIES + "/ingest", json={"jd_text": jd_variant(f"seed {persona.label}")}
+    ).json()
+    persona.request(
+        "PATCH",
+        f"{OPPORTUNITIES}/{opportunity['id']}",
+        json={"expected_state_version": opportunity["state_version"], "title": title},
+    )
+    created = persona.request(
+        "POST",
+        f"{OPPORTUNITIES}/{opportunity['id']}/qualifications",
+        json={"kind": "minimum", "text_verbatim": line, "category": "skill"},
+    ).json()
+    company_row = persona.request("POST", COMPANIES, json={"name": company}).json()
+    detail = persona.request("GET", f"{OPPORTUNITIES}/{opportunity['id']}").json()
+    return {
+        "opportunity": opportunity["id"],
+        "opportunity_version": str(detail["state_version"]),
+        "qualification": created["id"],
+        "company": company_row["id"],
+    }
 
 
 def seed(persona: Persona, *, label: str, headline: str, lane: str) -> dict[str, str]:
@@ -260,6 +406,12 @@ def personas(
     b = make_persona(app, idp, "b")
     a_ids = seed(a, label=A_LABEL, headline=A_HEADLINE, lane=A_LANE)
     seed(b, label="Persona B resume", headline="Persona B headline", lane="Persona B seeded lane")
+    a_ids.update(
+        seed_opportunity(a, title=A_OPPORTUNITY_TITLE, company=A_COMPANY, line=A_QUALIFICATION)
+    )
+    seed_opportunity(
+        b, title="Persona B title", company="Persona B seeded company", line="Persona B line"
+    )
     for owner_persona in (a, b):
         gateway, _ = make_gateway(app_sessions, script=[VALID])
         structured(gateway, owner_persona.user_id)
