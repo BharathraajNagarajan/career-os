@@ -253,6 +253,51 @@ describe("decisions", () => {
   });
 });
 
+describe("decision flow as used in the browser", () => {
+  it("sends the typed Skip reason after a Save, even when the page refetches while the prompt is open", async () => {
+    const server = serve({}, (call, state) => {
+      if (call.method === "POST" && call.url === `${BASE}/save`) {
+        state.opportunity = detail({
+          status: "saved",
+          state_version: 3,
+          allowed_actions: ["skip", "apply", "close"],
+        });
+        return jsonResponse(state.opportunity);
+      }
+      if (call.method === "POST" && call.url === `${BASE}/skip`) {
+        state.opportunity = detail({
+          status: "skipped",
+          state_version: 4,
+          allowed_actions: ["save", "apply", "close"],
+        });
+        return jsonResponse(state.opportunity);
+      }
+      return undefined;
+    });
+    const { client } = renderPage(<OpportunityDetail />, ROUTE);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    await screen.findByText(/Status: saved/);
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    const reason = screen.getByLabelText("Reason (optional)");
+    fireEvent.change(reason, { target: { value: "testing skip" } });
+    await client.invalidateQueries();
+    await waitFor(() => {
+      expect(server.calls.filter((call) => call.url === BASE).length).toBeGreaterThan(2);
+    });
+    expect(screen.getByLabelText("Reason (optional)")).toHaveValue("testing skip");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm skip" }));
+
+    await waitFor(() => {
+      expect(posts(server, "/skip")).toHaveLength(1);
+    });
+    expect(bodyOf(posts(server, "/skip")[0])).toEqual({
+      expected_state_version: 3,
+      reason: "testing skip",
+    });
+  });
+});
+
 describe("apply", () => {
   it("offers active resumes and lanes, a channel and today's date, then shows the application", async () => {
     const server = serve({}, (call, state) => {
@@ -405,6 +450,74 @@ describe("application", () => {
       occurred_at: new Date("2026-01-05T09:30").toISOString(),
       note: "take-home sent",
     });
+  });
+
+  it("keeps the chosen event type after recording, confirms it, and records the same type again", async () => {
+    let version = 1;
+    const server = serve({ opportunity: applied, applications: [application()] }, (call, state) => {
+      if (call.method === "POST" && call.url === "/api/v1/applications/app-1/events") {
+        version += 1;
+        state.applications = [application({ stage: "interviewing", state_version: version })];
+        return jsonResponse(state.applications[0]);
+      }
+      return undefined;
+    });
+    renderPage(<OpportunityDetail />, ROUTE);
+
+    const form = await screen.findByRole("form", { name: "Record event" });
+    fireEvent.change(within(form).getByLabelText("Event type"), {
+      target: { value: "INTERVIEW_SCHEDULED" },
+    });
+    fireEvent.change(within(form).getByLabelText("Note (optional)"), {
+      target: { value: "first note" },
+    });
+    fireEvent.click(within(form).getByRole("button", { name: "Record event" }));
+
+    expect(await screen.findByText("Recorded: Interview scheduled.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Event type")).toHaveValue("INTERVIEW_SCHEDULED");
+    });
+    expect(screen.getByLabelText("Note (optional)")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Record event" }));
+
+    await waitFor(() => {
+      expect(posts(server, "/events")).toHaveLength(2);
+    });
+    const [first, second] = posts(server, "/events").map(bodyOf);
+    expect(first).toMatchObject({ event_type: "INTERVIEW_SCHEDULED", note: "first note" });
+    expect(second).toMatchObject({
+      expected_state_version: 2,
+      event_type: "INTERVIEW_SCHEDULED",
+      note: null,
+    });
+  });
+
+  it("clears the confirmation on the next change and falls back when the type is no longer offered", async () => {
+    serve({ opportunity: applied, applications: [application()] }, (call, state) => {
+      if (call.method === "POST" && call.url === "/api/v1/applications/app-1/events") {
+        state.applications = [
+          application({
+            stage: "rejected",
+            is_terminal: true,
+            state_version: 2,
+            recordable_event_types: ["NOTE_ADDED"],
+          }),
+        ];
+        return jsonResponse(state.applications[0]);
+      }
+      return undefined;
+    });
+    renderPage(<OpportunityDetail />, ROUTE);
+
+    fireEvent.change(await screen.findByLabelText("Event type"), { target: { value: "REJECTED" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record event" }));
+
+    expect(await screen.findByText("Recorded: Rejected.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Event type")).toHaveValue("NOTE_ADDED");
+    });
+    fireEvent.change(screen.getByLabelText("Note (optional)"), { target: { value: "x" } });
+    expect(screen.queryByText(/^Recorded:/)).toBeNull();
   });
 
   it("explains a refused event and keeps the form", async () => {

@@ -42,7 +42,7 @@ export function renderPage(page: ReactElement, route?: PageRoute) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 }, mutations: { retry: false } },
   });
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       {route ? (
         <MemoryRouter initialEntries={[route.entry]}>
@@ -56,4 +56,5 @@ export function renderPage(page: ReactElement, route?: PageRoute) {
       )}
     </QueryClientProvider>,
   );
+  return { ...rendered, client };
 }

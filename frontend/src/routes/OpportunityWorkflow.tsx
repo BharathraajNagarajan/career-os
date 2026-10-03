@@ -367,9 +367,14 @@ interface RecordFormProps {
 }
 
 function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
-  const [eventType, setEventType] = useState(application.recordable_event_types[0] ?? "");
+  const available = application.recordable_event_types;
+  const [chosen, setChosen] = useState(available[0] ?? "");
   const [when, setWhen] = useState(nowLocalInput());
   const [note, setNote] = useState("");
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const eventType = available.includes(chosen as (typeof available)[number])
+    ? chosen
+    : (available[0] ?? "");
   const record = useMutation({
     mutationFn: () =>
       recordApplicationEvent(application, {
@@ -378,8 +383,10 @@ function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
         note: orNull(note),
       }),
     onSuccess: (next) => {
+      setChosen(eventType);
       setNote("");
       setWhen(nowLocalInput());
+      setRecorded(eventType);
       onRecorded(next);
     },
     onError: onFailure,
@@ -399,7 +406,8 @@ function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
           <select
             value={eventType}
             onChange={(event) => {
-              setEventType(event.target.value);
+              setChosen(event.target.value);
+              setRecorded(null);
             }}
           >
             {application.recordable_event_types.map((value) => (
@@ -419,6 +427,7 @@ function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
             value={when}
             onChange={(event) => {
               setWhen(event.target.value);
+              setRecorded(null);
             }}
           />
         </label>
@@ -432,6 +441,7 @@ function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
             value={note}
             onChange={(event) => {
               setNote(event.target.value);
+              setRecorded(null);
             }}
           />
         </label>
@@ -439,6 +449,7 @@ function RecordForm({ application, onRecorded, onFailure }: RecordFormProps) {
       <button type="submit" disabled={record.isPending || when === "" || eventType === ""}>
         Record event
       </button>
+      {recorded !== null && <p role="status">Recorded: {humanize(recorded)}.</p>}
       {record.isError && (
         <Failure
           error={record.error}
@@ -499,7 +510,7 @@ function ApplicationPanel({ application, onRefresh }: ApplicationPanelProps) {
         />
       )}
       <RecordForm
-        key={`${application.id}:${String(application.state_version)}`}
+        key={application.id}
         application={application}
         onRecorded={(next) => {
           void store(next);
