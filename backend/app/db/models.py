@@ -243,6 +243,72 @@ class RecruitingActionStatus(StrEnum):
     SUPERSEDED = "superseded"
 
 
+class ContactSource(StrEnum):
+    MANUAL = "manual"
+    GMAIL = "gmail"
+    IMPORT = "import"
+
+
+class ContactCompanyRelation(StrEnum):
+    EMPLOYEE = "employee"
+    RECRUITER = "recruiter"
+    FORMER_EMPLOYEE = "former_employee"
+    AGENCY_RECRUITER = "agency_recruiter"
+    OTHER = "other"
+
+
+class ContactOpportunityRole(StrEnum):
+    RECRUITER = "recruiter"
+    HIRING_MANAGER = "hiring_manager"
+    REFERRER = "referrer"
+    INTERVIEWER = "interviewer"
+    TEAM_MEMBER = "team_member"
+    OTHER = "other"
+
+
+class InteractionChannel(StrEnum):
+    EMAIL = "email"
+    LINKEDIN = "linkedin"
+    PHONE = "phone"
+    IN_PERSON = "in_person"
+    OTHER = "other"
+
+
+class InteractionDirection(StrEnum):
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+class RecruitingActionKind(StrEnum):
+    FOLLOW_UP = "follow_up"
+    REPLY = "reply"
+    COMPLETE_ASSESSMENT = "complete_assessment"
+    ATTEND_INTERVIEW = "attend_interview"
+    SCHEDULE_INTERVIEW = "schedule_interview"
+    OUTREACH = "outreach"
+    CUSTOM = "custom"
+
+
+class ActionOrigin(StrEnum):
+    USER = "user"
+    EXTRACTED = "extracted"
+    CHAT = "chat"
+    GMAIL = "gmail"
+    SYSTEM = "system"
+
+
+class RuleScope(StrEnum):
+    GLOBAL = "global"
+    COMPANY = "company"
+    LANE = "lane"
+
+
+class RuleType(StrEnum):
+    CONSTRAINT = "constraint"
+    PREFERENCE = "preference"
+    COOLDOWN = "cooldown"
+
+
 class User(HasId, HasCreatedAt, Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -657,6 +723,176 @@ class Application(UserOwned, StateVersioned, HasCreatedAt, Base):
         TextEnum(ApplicationStage), server_default=ApplicationStage.APPLIED.value
     )
     is_terminal: Mapped[bool] = mapped_column(server_default=text("false"))
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Contact(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "contacts"
+    __table_args__ = owned_table_args(
+        enum_check("source", ContactSource),
+        CheckConstraint("char_length(full_name) BETWEEN 1 AND 200", name="full_name_length"),
+        CheckConstraint("jsonb_typeof(emails) = 'object'", name="emails_object"),
+        CheckConstraint("char_length(notes) <= 5000", name="notes_length"),
+        Index("ix_contacts_emails", "emails", postgresql_using="gin"),
+        Index("ix_contacts_user_id_created_at", "user_id", "created_at"),
+    )
+
+    full_name: Mapped[str] = mapped_column(Text)
+    emails: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    linkedin_url: Mapped[str | None] = mapped_column(Text)
+    headline: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str] = mapped_column(Text, server_default="")
+    source: Mapped[ContactSource] = mapped_column(
+        TextEnum(ContactSource), server_default=ContactSource.MANUAL.value
+    )
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class ContactCompany(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "contact_companies"
+    __table_args__ = owned_table_args(
+        enum_check("relation", ContactCompanyRelation),
+        owned_fk("contact_id", "contacts"),
+        owned_fk("company_id", "companies"),
+        UniqueConstraint("user_id", "contact_id", "company_id"),
+        CheckConstraint("title IS NULL OR char_length(title) <= 200", name="title_length"),
+        Index("ix_contact_companies_user_id_company_id", "user_id", "company_id"),
+    )
+
+    contact_id: Mapped[uuid.UUID]
+    company_id: Mapped[uuid.UUID]
+    relation: Mapped[ContactCompanyRelation] = mapped_column(
+        TextEnum(ContactCompanyRelation), server_default=ContactCompanyRelation.OTHER.value
+    )
+    title: Mapped[str | None] = mapped_column(Text)
+    is_current: Mapped[bool] = mapped_column(server_default=text("true"))
+
+
+class ContactOpportunity(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "contact_opportunities"
+    __table_args__ = owned_table_args(
+        enum_check("role", ContactOpportunityRole),
+        owned_fk("contact_id", "contacts"),
+        owned_fk("opportunity_id", "opportunities"),
+        UniqueConstraint("user_id", "contact_id", "opportunity_id", "role"),
+        Index("ix_contact_opportunities_user_id_opportunity_id", "user_id", "opportunity_id"),
+    )
+
+    contact_id: Mapped[uuid.UUID]
+    opportunity_id: Mapped[uuid.UUID]
+    role: Mapped[ContactOpportunityRole] = mapped_column(TextEnum(ContactOpportunityRole))
+
+
+class Interaction(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "interactions"
+    __table_args__ = owned_table_args(
+        enum_check("channel", InteractionChannel),
+        enum_check("direction", InteractionDirection),
+        owned_fk("contact_id", "contacts"),
+        owned_fk("company_id", "companies"),
+        owned_fk("opportunity_id", "opportunities"),
+        owned_fk("application_id", "applications"),
+        owned_fk("artifact_id", "artifacts"),
+        CheckConstraint("summary IS NULL OR char_length(summary) <= 2000", name="summary_length"),
+        Index(
+            "ix_interactions_user_id_contact_id_occurred_at", "user_id", "contact_id", "occurred_at"
+        ),
+        Index("ix_interactions_user_id_opportunity_id", "user_id", "opportunity_id"),
+        Index("ix_interactions_user_id_application_id", "user_id", "application_id"),
+    )
+
+    contact_id: Mapped[uuid.UUID]
+    company_id: Mapped[uuid.UUID | None]
+    opportunity_id: Mapped[uuid.UUID | None]
+    application_id: Mapped[uuid.UUID | None]
+    channel: Mapped[InteractionChannel] = mapped_column(TextEnum(InteractionChannel))
+    direction: Mapped[InteractionDirection] = mapped_column(TextEnum(InteractionDirection))
+    occurred_at: Mapped[datetime]
+    summary: Mapped[str | None] = mapped_column(Text)
+    artifact_id: Mapped[uuid.UUID | None]
+    external_ref_id: Mapped[uuid.UUID | None]
+
+
+class RecruitingAction(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "recruiting_actions"
+    __table_args__ = owned_table_args(
+        enum_check("kind", RecruitingActionKind),
+        enum_check("status", RecruitingActionStatus),
+        enum_check("origin", ActionOrigin),
+        owned_fk("opportunity_id", "opportunities"),
+        owned_fk("application_id", "applications"),
+        owned_fk("contact_id", "contacts"),
+        owned_fk("interaction_id", "interactions"),
+        owned_fk("recommendation_llm_run_id", "llm_runs"),
+        owned_fk("draft_llm_run_id", "llm_runs"),
+        CheckConstraint("char_length(title) BETWEEN 1 AND 200", name="title_length"),
+        CheckConstraint("sequence_no >= 1", name="sequence_no_positive"),
+        CheckConstraint(
+            "(status = 'snoozed') = (snoozed_until IS NOT NULL)", name="snooze_consistent"
+        ),
+        CheckConstraint(
+            "kind NOT IN ('attend_interview', 'complete_assessment') OR due_at IS NOT NULL",
+            name="scheduled_kinds_have_due_at",
+        ),
+        CheckConstraint(
+            "kind = 'outreach' OR (recommendation_llm_run_id IS NULL AND draft_subject IS NULL "
+            "AND draft_body IS NULL AND draft_llm_run_id IS NULL AND draft_updated_at IS NULL)",
+            name="draft_only_for_outreach",
+        ),
+        Index("ix_recruiting_actions_user_id_status_due_at", "user_id", "status", "due_at"),
+        Index("ix_recruiting_actions_user_id_opportunity_id", "user_id", "opportunity_id"),
+        Index("ix_recruiting_actions_user_id_application_id", "user_id", "application_id"),
+        Index("ix_recruiting_actions_user_id_contact_id", "user_id", "contact_id"),
+    )
+
+    kind: Mapped[RecruitingActionKind] = mapped_column(TextEnum(RecruitingActionKind))
+    title: Mapped[str] = mapped_column(Text)
+    due_at: Mapped[datetime | None]
+    status: Mapped[RecruitingActionStatus] = mapped_column(
+        TextEnum(RecruitingActionStatus), server_default=RecruitingActionStatus.OPEN.value
+    )
+    snoozed_until: Mapped[datetime | None]
+    sequence_no: Mapped[int] = mapped_column(server_default="1")
+    opportunity_id: Mapped[uuid.UUID | None]
+    application_id: Mapped[uuid.UUID | None]
+    contact_id: Mapped[uuid.UUID | None]
+    interaction_id: Mapped[uuid.UUID | None]
+    origin: Mapped[ActionOrigin] = mapped_column(TextEnum(ActionOrigin))
+    recommendation_llm_run_id: Mapped[uuid.UUID | None]
+    draft_subject: Mapped[str | None] = mapped_column(Text)
+    draft_body: Mapped[str | None] = mapped_column(Text)
+    draft_llm_run_id: Mapped[uuid.UUID | None]
+    draft_updated_at: Mapped[datetime | None]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class StrategyRule(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "strategy_rules"
+    __table_args__ = owned_table_args(
+        enum_check("scope", RuleScope),
+        enum_check("rule_type", RuleType),
+        owned_fk("company_id", "companies"),
+        owned_fk("lane_id", "resume_lanes"),
+        CheckConstraint("char_length(statement) BETWEEN 1 AND 1000", name="statement_length"),
+        CheckConstraint(
+            "condition IS NULL OR jsonb_typeof(condition) = 'object'", name="condition_object"
+        ),
+        CheckConstraint(
+            "(scope = 'global' AND company_id IS NULL AND lane_id IS NULL) OR "
+            "(scope = 'company' AND company_id IS NOT NULL AND lane_id IS NULL) OR "
+            "(scope = 'lane' AND lane_id IS NOT NULL AND company_id IS NULL)",
+            name="scope_matches_target",
+        ),
+        Index("ix_strategy_rules_user_id_scope", "user_id", "scope"),
+    )
+
+    scope: Mapped[RuleScope] = mapped_column(TextEnum(RuleScope))
+    company_id: Mapped[uuid.UUID | None]
+    lane_id: Mapped[uuid.UUID | None]
+    statement: Mapped[str] = mapped_column(Text)
+    rule_type: Mapped[RuleType] = mapped_column(TextEnum(RuleType))
+    condition: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
+    active: Mapped[bool] = mapped_column(server_default=text("true"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
