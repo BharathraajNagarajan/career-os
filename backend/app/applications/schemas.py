@@ -108,3 +108,5 @@ class TimelineEntryResponse(BaseModel):
     voids_event_id: uuid.UUID | None
     note: str | None
     voidable: bool
+    interaction_channel: str | None = None
+    interaction_direction: str | None = None

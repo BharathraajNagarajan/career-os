@@ -26,6 +26,8 @@ class TimelineEntry:
     voids_event_id: uuid.UUID | None
     note: str | None
     voidable: bool
+    interaction_channel: str | None = None
+    interaction_direction: str | None = None
 
     @property
     def order_key(self) -> tuple[datetime, datetime, uuid.UUID]:
