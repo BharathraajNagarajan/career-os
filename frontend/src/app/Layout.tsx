@@ -9,7 +9,8 @@ export function Layout() {
           <Link to="/profile">Profile</Link> <Link to="/resumes">Resumes</Link>{" "}
           <Link to="/lanes">Lanes</Link> <Link to="/opportunities">Opportunities</Link>{" "}
           <Link to="/applications">Applications</Link> <Link to="/companies">Companies</Link>{" "}
-          <Link to="/review">Review</Link> <Link to="/settings">Settings</Link>
+          <Link to="/contacts">Contacts</Link> <Link to="/actions">Actions</Link>{" "}
+          <Link to="/rules">Rules</Link> <Link to="/review">Review</Link> <Link to="/settings">Settings</Link>
         </nav>
       </header>
       <main className="shell-main">

@@ -137,6 +137,7 @@ class ApplicationService:
         note: str | None,
         actor: Actor = Actor.USER,
         source_ref_id: uuid.UUID | None = None,
+        interaction_id: uuid.UUID | None = None,
         commit: bool = True,
     ) -> int:
         def work() -> int:
@@ -150,7 +151,9 @@ class ApplicationService:
                 event_type=event_type.value,
                 occurred_at=occurred_at,
                 actor=actor,
-                payload=ApplicationNoted(application_id=row.id, note=note),
+                payload=ApplicationNoted(
+                    application_id=row.id, note=note, interaction_id=interaction_id
+                ),
                 source_ref_id=source_ref_id,
             )
             return self._reproject(user_id, row)

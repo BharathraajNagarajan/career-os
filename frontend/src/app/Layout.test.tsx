@@ -34,6 +34,9 @@ describe("Layout", () => {
       ["Opportunities", "/opportunities"],
       ["Applications", "/applications"],
       ["Companies", "/companies"],
+      ["Contacts", "/contacts"],
+      ["Actions", "/actions"],
+      ["Rules", "/rules"],
       ["Review", "/review"],
       ["Settings", "/settings"],
     ]);

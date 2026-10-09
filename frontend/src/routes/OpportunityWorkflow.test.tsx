@@ -91,6 +91,9 @@ function serve(initial: Partial<Server> = {}, command?: Command): Server {
       if (call.url === "/api/v1/companies") {
         return jsonResponse([company()]);
       }
+      if (call.url.startsWith("/api/v1/contacts") || call.url.startsWith("/api/v1/actions")) {
+        return jsonResponse([]);
+      }
       if (call.url === "/api/v1/resumes") {
         return jsonResponse(RESUMES);
       }

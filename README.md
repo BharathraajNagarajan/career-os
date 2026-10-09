@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 7 (opportunity and application state machines, decisions, timeline; builds on the JD ingestion of Task 6). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 8 (contacts, interactions, recruiting actions and strategy rules; builds on the Task 7 state machines and the JD ingestion of Task 6). See [docs/architecture/contacts-actions-rules.md](docs/architecture/contacts-actions-rules.md). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -37,6 +37,8 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
 (`make up` runs the same command where GNU Make is installed.)
+
+Run it, and rebuild it, from a clean shell: Docker Compose lets shell environment variables override `--env-file`, so variables such as `SESSION_SECRET` left over from test runs would silently replace the values in `.env`.
 
 This starts Postgres, runs the one-shot `migrate` service (creates the `career_os_app` role and applies Alembic migrations), then starts the API on http://localhost:8000, the worker, and the frontend on http://localhost:5173. The API and worker connect as `career_os_app`, never as the database owner. All ports bind to 127.0.0.1 only. The API reloads on backend changes and the frontend uses Vite hot reload.
 

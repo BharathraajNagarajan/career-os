@@ -25,6 +25,7 @@ import type {
   Qualification,
   WorkplaceType,
 } from "../api/opportunities";
+import { OpportunityRelationships } from "./OpportunityRelationships";
 import { ApplicationSection, DecisionPanel } from "./OpportunityWorkflow";
 import {
   CONFLICT_MESSAGE,
@@ -676,6 +677,7 @@ export function OpportunityDetail() {
 
       <DecisionPanel detail={data} />
       <ApplicationSection opportunityId={data.id} />
+      <OpportunityRelationships opportunityId={data.id} />
 
       {data.source_url !== null && (
         <p>

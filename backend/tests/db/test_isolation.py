@@ -203,6 +203,86 @@ def assert_a_application_untouched(personas: Personas) -> None:
     assert len(timeline) == int(personas.a_ids["timeline_length"])
 
 
+CONTACTS = "/api/v1/contacts"
+INTERACTIONS = "/api/v1/interactions"
+ACTIONS = "/api/v1/actions"
+RULES = "/api/v1/strategy-rules"
+A_CONTACT_NAME = "Persona A contact"
+A_CONTACT_EMAIL = "persona-a-contact@example.test"
+A_INTERACTION_SUMMARY = "Persona A interaction summary"
+A_ACTION_TITLE = "Persona A action title"
+A_RULE_STATEMENT = "Persona A rule statement"
+STALE_STAMP = "2026-01-01T00:00:00Z"
+
+
+def contact_foreign(personas: Personas) -> dict[str, str]:
+    return {"contact_id": personas.a_ids["contact"]}
+
+
+def contact_company_foreign(personas: Personas) -> dict[str, str]:
+    return {"contact_id": personas.a_ids["contact"], "company_id": personas.a_ids["company"]}
+
+
+def contact_opportunity_foreign(personas: Personas) -> dict[str, str]:
+    return {
+        "contact_id": personas.a_ids["contact"],
+        "opportunity_id": personas.a_ids["opportunity"],
+    }
+
+
+def merge_foreign(personas: Personas) -> dict[str, str]:
+    return {"survivor_id": personas.a_ids["contact"]}
+
+
+def interaction_foreign(personas: Personas) -> dict[str, str]:
+    return {"interaction_id": personas.a_ids["interaction"]}
+
+
+def action_foreign(personas: Personas) -> dict[str, str]:
+    return {"action_id": personas.a_ids["action"]}
+
+
+def rule_foreign(personas: Personas) -> dict[str, str]:
+    return {"rule_id": personas.a_ids["rule"]}
+
+
+def assert_a_contact_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(CONTACTS).json()
+    assert [row["id"] for row in listed] == [personas.a_ids["contact"]]
+    body = personas.a.client.get(f"{CONTACTS}/{personas.a_ids['contact']}").json()
+    assert body["full_name"] == A_CONTACT_NAME
+    assert body["headline"] is None
+    assert [item["address"] for item in body["emails"]] == [A_CONTACT_EMAIL]
+    assert body["updated_at"] == personas.a_ids["contact_updated_at"]
+    assert body["companies"] == []
+    assert body["opportunities"] == []
+    assert [item["summary"] for item in body["interactions"]] == [A_INTERACTION_SUMMARY]
+    assert [item["title"] for item in body["actions"]] == [A_ACTION_TITLE]
+
+
+def assert_a_interaction_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(INTERACTIONS).json()
+    assert [(row["id"], row["summary"]) for row in listed] == [
+        (personas.a_ids["interaction"], A_INTERACTION_SUMMARY)
+    ]
+    assert_a_contact_untouched(personas)
+
+
+def assert_a_action_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(ACTIONS).json()
+    assert [(row["id"], row["title"], row["status"]) for row in listed] == [
+        (personas.a_ids["action"], A_ACTION_TITLE, "open")
+    ]
+    assert listed[0]["state_version"] == int(personas.a_ids["action_version"])
+
+
+def assert_a_rule_untouched(personas: Personas) -> None:
+    listed = personas.a.client.get(RULES).json()
+    assert [(row["id"], row["statement"], row["active"]) for row in listed] == [
+        (personas.a_ids["rule"], A_RULE_STATEMENT, True)
+    ]
+
+
 PROTECTED: dict[Route_, IsolationCase] = {
     ("GET", "/api/v1/auth/me"): IsolationCase(
         "/api/v1/auth/me",
@@ -455,6 +535,139 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=application_foreign,
         a_untouched=assert_a_application_untouched,
     ),
+    ("GET", CONTACTS): IsolationCase(
+        CONTACTS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["contact"]},
+    ),
+    ("POST", CONTACTS): IsolationCase(
+        CONTACTS,
+        body={"full_name": "Persona B contact", "emails": [A_CONTACT_EMAIL]},
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("GET", CONTACTS + "/{contact_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}",
+        foreign_params=contact_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("PATCH", CONTACTS + "/{contact_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}",
+        body={"expected_updated_at": STALE_STAMP, "headline": "hijacked"},
+        foreign_params=contact_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("POST", CONTACTS + "/{contact_id}/companies/{company_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}/companies/{company_id}",
+        body={"relation": "recruiter"},
+        foreign_params=contact_company_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("DELETE", CONTACTS + "/{contact_id}/companies/{company_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}/companies/{company_id}",
+        foreign_params=contact_company_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("POST", CONTACTS + "/{contact_id}/opportunities/{opportunity_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}/opportunities/{opportunity_id}",
+        body={"role": "recruiter"},
+        foreign_params=contact_opportunity_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("DELETE", CONTACTS + "/{contact_id}/opportunities/{opportunity_id}"): IsolationCase(
+        CONTACTS + "/{contact_id}/opportunities/{opportunity_id}?role=recruiter",
+        foreign_params=contact_opportunity_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("POST", CONTACTS + "/{survivor_id}/merge"): IsolationCase(
+        CONTACTS + "/{survivor_id}/merge",
+        body={
+            "merged_id": "00000000-0000-4000-8000-000000000001",
+            "expected_survivor_updated_at": STALE_STAMP,
+            "expected_merged_updated_at": STALE_STAMP,
+        },
+        foreign_params=merge_foreign,
+        a_untouched=assert_a_contact_untouched,
+    ),
+    ("GET", INTERACTIONS): IsolationCase(
+        INTERACTIONS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["interaction"]},
+    ),
+    ("GET", INTERACTIONS + "/{interaction_id}"): IsolationCase(
+        INTERACTIONS + "/{interaction_id}",
+        foreign_params=interaction_foreign,
+        a_untouched=assert_a_interaction_untouched,
+    ),
+    ("POST", INTERACTIONS): IsolationCase(
+        INTERACTIONS,
+        body={
+            "contact_id": "00000000-0000-4000-8000-000000000001",
+            "channel": "email",
+            "direction": "outbound",
+            "occurred_at": STALE_STAMP,
+        },
+        a_untouched=assert_a_interaction_untouched,
+    ),
+    ("GET", ACTIONS): IsolationCase(
+        ACTIONS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["action"]},
+    ),
+    ("GET", ACTIONS + "/{action_id}"): IsolationCase(
+        ACTIONS + "/{action_id}",
+        foreign_params=action_foreign,
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("POST", ACTIONS): IsolationCase(
+        ACTIONS,
+        body={"kind": "custom", "title": "Persona B action"},
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("PATCH", ACTIONS + "/{action_id}"): IsolationCase(
+        ACTIONS + "/{action_id}",
+        body={"expected_state_version": 1, "title": "hijacked"},
+        foreign_params=action_foreign,
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("POST", ACTIONS + "/{action_id}/snooze"): IsolationCase(
+        ACTIONS + "/{action_id}/snooze",
+        body={"expected_state_version": 1, "until": "2099-01-01T00:00:00Z"},
+        foreign_params=action_foreign,
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("POST", ACTIONS + "/{action_id}/complete"): IsolationCase(
+        ACTIONS + "/{action_id}/complete",
+        body={"expected_state_version": 1},
+        foreign_params=action_foreign,
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("POST", ACTIONS + "/{action_id}/dismiss"): IsolationCase(
+        ACTIONS + "/{action_id}/dismiss",
+        body={"expected_state_version": 1},
+        foreign_params=action_foreign,
+        a_untouched=assert_a_action_untouched,
+    ),
+    ("GET", RULES): IsolationCase(
+        RULES,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["rule"]},
+    ),
+    ("POST", RULES): IsolationCase(
+        RULES,
+        body={"scope": "global", "statement": "Persona B rule", "rule_type": "preference"},
+        a_untouched=assert_a_rule_untouched,
+    ),
+    ("PATCH", RULES + "/{rule_id}"): IsolationCase(
+        RULES + "/{rule_id}",
+        body={"statement": "hijacked", "active": False},
+        foreign_params=rule_foreign,
+        a_untouched=assert_a_rule_untouched,
+    ),
+    ("DELETE", RULES + "/{rule_id}"): IsolationCase(
+        RULES + "/{rule_id}",
+        foreign_params=rule_foreign,
+        a_untouched=assert_a_rule_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
@@ -529,6 +742,49 @@ def seed_application(persona: Persona, a_ids: dict[str, str]) -> dict[str, str]:
     }
 
 
+def seed_relationships(persona: Persona, *, tag: str) -> dict[str, str]:
+    name = A_CONTACT_NAME if tag == "a" else f"Persona {tag.upper()} contact"
+    email = A_CONTACT_EMAIL if tag == "a" else f"persona-{tag}-contact@example.test"
+    contact = persona.request("POST", CONTACTS, json={"full_name": name, "emails": [email]}).json()
+    interaction = persona.request(
+        "POST",
+        INTERACTIONS,
+        json={
+            "contact_id": contact["id"],
+            "channel": "email",
+            "direction": "outbound",
+            "occurred_at": datetime.now(UTC).isoformat(),
+            "summary": A_INTERACTION_SUMMARY if tag == "a" else f"Persona {tag} summary",
+        },
+    ).json()
+    action = persona.request(
+        "POST",
+        ACTIONS,
+        json={
+            "kind": "custom",
+            "title": A_ACTION_TITLE if tag == "a" else f"Persona {tag} action",
+            "contact_id": contact["id"],
+        },
+    ).json()
+    rule = persona.request(
+        "POST",
+        RULES,
+        json={
+            "scope": "global",
+            "statement": A_RULE_STATEMENT if tag == "a" else f"Persona {tag} rule",
+            "rule_type": "preference",
+        },
+    ).json()
+    return {
+        "contact": contact["id"],
+        "contact_updated_at": contact["updated_at"],
+        "interaction": interaction["id"],
+        "action": action["id"],
+        "action_version": str(action["state_version"]),
+        "rule": rule["id"],
+    }
+
+
 def seed(persona: Persona, *, label: str, headline: str, lane: str) -> dict[str, str]:
     lane_row = create_lane(persona, lane)
     resume = upload(
@@ -559,6 +815,8 @@ def personas(
         b, title="Persona B title", company="Persona B seeded company", line="Persona B line"
     )
     seed_application(b, b_ids)
+    a_ids.update(seed_relationships(a, tag="a"))
+    seed_relationships(b, tag="b")
     for owner_persona in (a, b):
         gateway, _ = make_gateway(app_sessions, script=[VALID])
         structured(gateway, owner_persona.user_id)

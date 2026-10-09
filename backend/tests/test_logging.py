@@ -34,6 +34,18 @@ def test_allowed_fields_pass_through(read_logs: ReadLogs) -> None:
     assert "dropped_field_count" not in entry
 
 
+@pytest.mark.usefixtures("log_stream")
+def test_wake_action_fields_pass_through(read_logs: ReadLogs) -> None:
+    action_id = str(uuid.uuid4())
+    get_logger("test").info("wake_action_handled", action_id=action_id, woken=True)
+
+    [entry] = read_logs()
+
+    assert entry["action_id"] == action_id
+    assert entry["woken"] is True
+    assert "dropped_field_count" not in entry
+
+
 @pytest.mark.parametrize(
     "secret",
     [

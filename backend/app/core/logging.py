@@ -50,6 +50,8 @@ ALLOWED_FIELDS = frozenset(
         "review_item_id",
         "proposal_type",
         "opportunity_id",
+        "action_id",
+        "woken",
         "dropped_count",
     }
 )

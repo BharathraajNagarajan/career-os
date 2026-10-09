@@ -1,3 +1,5 @@
+from app.actions.jobs import WAKE_ACTION_JOB, WakeActionPayload
+from app.actions.wake import make_wake_action_handler
 from app.artifacts.deletion import make_storage_deletion_hook
 from app.artifacts.storage import StorageAdapter
 from app.auth.deletion import (
@@ -28,6 +30,7 @@ def register_job_handlers(
     registry.register(
         PARSE_RESUME_JOB, ParseResumePayload, make_parse_resume_handler(storage, settings)
     )
+    registry.register(WAKE_ACTION_JOB, WakeActionPayload, make_wake_action_handler())
     if gateway is not None:
         registry.register(
             EXTRACT_JD_JOB, ExtractJdPayload, make_extract_jd_handler(gateway, settings)

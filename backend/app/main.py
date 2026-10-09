@@ -6,23 +6,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import __version__
+from app.actions.router import router as actions_router
+from app.actions.timeline import register_action_event_source
 from app.applications.router import router as applications_router
 from app.artifacts.storage import FilesystemStorage, StorageAdapter
 from app.auth.oidc import IdentityProvider
 from app.auth.router import router as auth_router
 from app.config import Settings, get_settings
+from app.contacts.router import router as contacts_router
+from app.contacts.timeline import register_interaction_source
 from app.core.db import create_db_engine
 from app.core.db import session_factory as make_session_factory
 from app.core.errors import install_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.interactions.router import router as interactions_router
 from app.llm.router import router as llm_router
 from app.opportunities.router import router as opportunities_router
 from app.profile.router import router as profile_router
 from app.resumes.router import router as resumes_router
 from app.review.handlers import ReviewHandlerRegistry
 from app.review.router import router as review_router
+from app.strategy.router import router as strategy_router
 
 
 def create_app(
@@ -77,6 +83,12 @@ def create_app(
     app.include_router(review_router)
     app.include_router(opportunities_router)
     app.include_router(applications_router)
+    app.include_router(contacts_router)
+    app.include_router(interactions_router)
+    app.include_router(actions_router)
+    app.include_router(strategy_router)
+    register_interaction_source()
+    register_action_event_source()
 
     get_logger(__name__).info(
         "api_configured", environment=settings.environment.value, version=__version__

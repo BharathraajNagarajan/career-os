@@ -57,9 +57,9 @@ Commands and their refusals (`application_command_check`):
 
 `occurred_at` may be backdated without limit and may be at most 5 minutes ahead of the **database** clock (`422 occurred_at_in_future`, which absorbs browser clock drift). It must carry a timezone.
 
-### RecruitingAction (spec 5.3): pure function only
+### RecruitingAction (spec 5.3)
 
-`recruiting_action_transition(status, command, actor, now, until?)` and its tests exist so Task 8 can use it. There is no table, no API and no persistence in this task.
+`recruiting_action_transition(status, command, actor, now, until?)` is persisted since Task 8 (`recruiting_actions`, migration 0007). The service calls it for every transition and never repeats its rules; `allowed_actions` in API responses is computed from it. Snoozing enqueues a `wake_action` job that applies the system-only `wake` transition if the action is still snoozed at the same version. See [contacts-actions-rules.md](contacts-actions-rules.md).
 
 | From | snooze | wake | complete | dismiss | supersede | restore |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -97,7 +97,7 @@ The reopen event's own `occurred_at` is the database clock, raised to the latest
 
 ## The single ordered timeline
 
-`GET /api/v1/opportunities/{id}/timeline` merges every source for one opportunity into one list ordered by `(occurred_at, recorded_at, id)`. Today there is one source, `domain_event_source`: the opportunity's own events (ingested, extracted, edited, priority changed, decided) plus the events of each of its applications. `TIMELINE_SOURCES` in `app/applications/timeline.py` is a list of functions `(session, user_id, opportunity_id) → entries`; Task 8 adds interactions and recruiting actions by appending a source, with no change to the merge or the endpoint.
+`GET /api/v1/opportunities/{id}/timeline` merges every source for one opportunity into one list ordered by `(occurred_at, recorded_at, id)`. There are three sources: `domain_event_source` (the opportunity's own events plus the events of each of its applications), and, since Task 8, interactions and recruiting-action events linked to the opportunity or its applications. `TIMELINE_SOURCES` in `app/applications/timeline.py` is a list of functions `(session, user_id, opportunity_id) → entries`; Task 8 appended its sources without changing the merge or the endpoint.
 
 Each entry: `id`, `aggregate_type`, `aggregate_id`, `event_type`, `occurred_at`, `recorded_at`, `actor`, `voided` (a later `EVENT_VOIDED` targets it), `voids_event_id`, `note` (the note or void reason, plain text), and `voidable` from the pure function. Voided entries stay in the list. Opportunity-aggregate entries are never voidable.
 
@@ -118,6 +118,6 @@ Notes and reasons are stored in the event payload and never logged (INV-01). Log
 
 ## Deferred
 
-- Persisting RecruitingActions, contacts and interactions: Task 8 (only the pure transition function exists now).
+- Automatic creation, supersede and restore of RecruitingActions from confirmed events: not built; see [contacts-actions-rules.md](contacts-actions-rules.md).
 - Review handlers for `create_application` and `application_event`, and Gmail as an event source: Task 13.
 - Design of the Application panel and timeline: Task 10 (the UI here is deliberately minimal).
