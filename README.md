@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 7 (opportunity and application state machines, decisions, timeline; builds on the JD ingestion of Task 6). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 8 (contacts, interactions, recruiting actions and strategy rules; builds on the Task 7 state machines and the JD ingestion of Task 6). See [docs/architecture/contacts-actions-rules.md](docs/architecture/contacts-actions-rules.md). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 

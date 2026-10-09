@@ -25,9 +25,13 @@ PostgreSQL 16 is the system of record and the job queue (ADR-002, ADR-006). Acce
 | `companies` | SELECT, INSERT, UPDATE | Editable by the user; no DELETE (merge, when built, re-points children) |
 | `opportunities` | SELECT, INSERT, UPDATE | State machine and editable fields; no DELETE |
 | `applications` | SELECT, INSERT, UPDATE | State machine; the stage columns are a cache of the events; no DELETE |
+| `contacts` | SELECT, INSERT, UPDATE, DELETE | DELETE exists only so a merge can remove the merged contact after re-pointing its children; history stays in `domain_events` |
+| `contact_companies`, `contact_opportunities`, `strategy_rules` | SELECT, INSERT, UPDATE, DELETE | Removing a link or a rule is legitimate |
+| `interactions` | SELECT, INSERT, and UPDATE on `contact_id` only | History: the summary cannot change and nothing is deleted; `contact_id` can move only so a merge can re-point rows. No DELETE |
+| `recruiting_actions` | SELECT, INSERT, UPDATE | State machine; no DELETE |
 | `qualifications` | SELECT, INSERT, DELETE, and UPDATE on `kind`, `ordinal`, `category`, `skill_keys`, `min_years`, `is_hard_constraint`, `updated_at` only | "Verbatim text always kept": `text_verbatim`, `origin`, `llm_run_id`, the parent link and the owner cannot change by privilege. Users may delete a requirement line |
 
-`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes`, `resume_lanes`, `llm_runs`, `review_items`, `qualifications`, `applications`, `opportunities` and `companies`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
+`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes`, `resume_lanes`, `llm_runs`, `review_items`, `qualifications`, `applications`, `opportunities`, `companies`, `contacts`, `contact_companies`, `contact_opportunities`, `interactions`, `recruiting_actions` and `strategy_rules`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
 
 The bootstrap command creates `career_os_app`, or resets its password if it exists, with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`. It is idempotent. Table grants live in the migration that creates each table, so they are versioned and reviewed with the schema. Roles are cluster-wide: bootstrapping any database on the same server, including a test database, sets the same role's password, so every environment on one server must share `APP_DB_PASSWORD`. The password is interpolated into connection URLs and must be URL-safe.
 
@@ -75,6 +79,19 @@ Events written by Task 7 (all in `domain_events`, each with a registered typed p
 | application | every other type in spec 5.1, including `APPLICATION_REOPENED` and `EVENT_VOIDED` (with `voids_event_id`) | record, void and reopen commands |
 
 See [state-machines.md](state-machines.md) for the rules.
+
+## Contacts, interactions, actions and rules (migration 0007)
+
+Six new tables, all user-owned with composite foreign keys: `contacts`, `contact_companies`, `contact_opportunities`, `interactions`, `recruiting_actions`, `strategy_rules`. Constraints, grants and the reasoning are in [contacts-actions-rules.md](contacts-actions-rules.md). The grants above are the whole privilege story: contacts can be deleted only by the merge; interactions can change only `contact_id`; recruiting actions are never deleted. Tests prove every enum check, composite foreign key, uniqueness rule, grant (including that an interaction summary cannot be updated) and the account-deletion cascade.
+
+Events written by Task 8 (all in `domain_events` with typed payloads at `schema_version` 1, ids and field names only):
+
+| Aggregate | Event types | Written by |
+| --- | --- | --- |
+| contact | `CONTACT_CREATED`, `CONTACT_EDITED` (field names), `CONTACT_MERGED` (on the survivor), `CONTACT_LINKED`, `CONTACT_UNLINKED` | contact commands |
+| recruiting_action | `RECRUITING_ACTION_CREATED`, `_EDITED`, `_SNOOZED`, `_WOKEN`, `_COMPLETED`, `_DISMISSED`, `_SUPERSEDED`, `_RESTORED` | create, edit and every transition, with the actor |
+
+The application note payload (`NOTE_ADDED`, `OUTREACH_SENT` and the other note-shaped types) is now `schema_version` 2 with an optional `interaction_id`; the registered v1 to v2 upcaster keeps older rows loading.
 
 ## Tenancy and INV-18
 
