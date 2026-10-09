@@ -36,6 +36,12 @@ function serve(initial: Detail, mutate?: Mutation, duplicates: DuplicateMatch[] 
     if (call.method === "GET" && call.url === "/api/v1/companies") {
       return jsonResponse([company(), company({ id: "company-2", name: "Other Corp" })]);
     }
+    if (
+      call.method === "GET" &&
+      (call.url.startsWith("/api/v1/contacts") || call.url.startsWith("/api/v1/actions"))
+    ) {
+      return jsonResponse([]);
+    }
     return mutate?.(call, server);
   });
   return server;

@@ -550,6 +550,9 @@ function TimelineRow({ entry, application, onChanged, onRefresh }: TimelineRowPr
       <time dateTime={entry.occurred_at}>{new Date(entry.occurred_at).toLocaleString()}</time>{" "}
       <span style={entry.voided ? { textDecoration: "line-through" } : undefined}>
         {humanize(entry.event_type)}
+        {entry.interaction_channel != null && (
+          <> ({humanize(entry.interaction_channel)}, {entry.interaction_direction})</>
+        )}
       </span>
       {entry.voided && <span> (voided)</span>} <span>by {entry.actor}</span>
       {entry.note !== null && <p>{entry.note}</p>}
