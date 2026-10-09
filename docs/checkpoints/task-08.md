@@ -50,7 +50,7 @@ Also: timeline sources for interactions and recruiting-action events; frontend p
 - A column-level grant (`UPDATE (contact_id)`) lets interactions stay history while still allowing a merge to re-point them. A test that tries to update `summary` proves it.
 - `dict(result.tuples())` on a SQLAlchemy result is not a mapping of rows; the opportunity timeline returned 500 until a test across the new source caught it.
 - Postgres JSONB containment (`@>`) with the GIN index gives the "one contact per address" lookup without a separate table, and an advisory lock per user closes the check-then-insert race.
-- The structured logger drops fields that are not on its allow-list (`dropped_field_count` shows in the worker log), which is why the wake handler's log line carries no ids. That is safe, but it means the line is less useful than intended.
+- The structured logger drops any field not on its allow-list. The wake handler's `action_id` and `woken` fields were being dropped until they were added; only ids and flags were added, never names, emails or text.
 
 ## Checks run and results
 
@@ -69,7 +69,7 @@ Also: timeline sources for interactions and recruiting-action events; frontend p
 
 ## Deviations from the frozen spec
 
-None. Where the brief and the spec differed, the spec was followed (see "Additions beyond the brief" and "Process deviations").
+None. Where the brief and the spec differed, the spec was followed (see "Clarifications where the spec overrode the brief").
 
 ## Additions beyond the brief
 
@@ -78,17 +78,23 @@ None. Where the brief and the spec differed, the spec was followed (see "Additio
 - Interaction timeline entries carry channel and direction as two optional fields.
 - `conflict` handling by `updated_at` (`expected_updated_at`) on contact edit and merge, because the spec gives contacts no `state_version`.
 
+## Clarifications where the spec overrode the brief
+
+- Email items are `{address, source, added_at}` with no `is_primary`, because the spec's Contact row lists no primary flag.
+- Strategy rules use the spec's fields `statement`, `rule_type`, `condition` and `active`.
+- `contact_opportunities` is unique per `(contact, opportunity, role)` as the spec says, not per `(contact, opportunity)`.
+- `interactions` has no `origin` column, because the spec's Interaction row lists none.
+- `outreach` actions cannot be created through the API in this task; the spec ties them to accepting an outreach recommendation (Task 14).
+- The merge record follows the owner's answer to the escalation (hard delete).
+- Task 7 `ApplicationNoted` v1 rows were not migrated; they load through the upcaster, as the spec requires for immutable rows.
+
 ## Process deviations
 
-- The brief's field lists were overridden by the spec's (brief: "the spec wins"): email items without `is_primary`; rule fields `statement`, `rule_type`, `condition`, `active`; `contact_opportunities` unique per role; no `origin` on interactions; `contact_companies` kept unique per contact and company as the brief says.
-- `outreach` actions cannot be created through the API in this task.
-- The merge record follows the owner's answer to the escalation (hard delete).
-- The Task 7 `ApplicationNoted` v1 rows were not migrated; they load through the upcaster, as the spec requires for immutable rows.
+None.
 
 ## Unresolved issues
 
 - Spec 5.3 says the system creates "complete assessment" and "attend interview" actions from a confirmed event. It is not clear whether an event the user records by hand counts, or only a confirmed ReviewItem from Gmail. Nothing was built; please decide before Task 12 or 14. Supersede and restore likewise have no trigger.
-- The wake handler's log line loses its fields to the logger allow-list.
 
 ## Git state
 
