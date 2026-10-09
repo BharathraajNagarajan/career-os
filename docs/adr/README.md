@@ -25,3 +25,4 @@ Each ADR is immutable once accepted. A change is a new ADR that supersedes the o
 | [019](019-outreach-without-new-tables.md) | Outreach without new tables | Proposed |
 | [020](020-phase-1-split-into-1a-and-1b.md) | Phase 1 split into 1A and 1B | Accepted (O-11, revision 3) |
 | [021](021-staleness-by-basis-comparison-explicit-re-run.md) | Staleness by basis comparison, explicit re-run | Accepted (O-12, revision 3) |
+| [022](022-recruiting-actions-only-from-user-or-confirmed-review.md) | Recruiting actions only from the user or a confirmed review | Accepted |

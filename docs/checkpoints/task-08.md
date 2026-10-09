@@ -95,8 +95,13 @@ None.
 
 ## Unresolved issues
 
-- Spec 5.3 says the system creates "complete assessment" and "attend interview" actions from a confirmed event. It is not clear whether an event the user records by hand counts, or only a confirmed ReviewItem from Gmail. Nothing was built. Still open: to be decided by the owner and the control chat before Task 13. Supersede and restore likewise have no trigger.
+- Supersede and restore have no trigger yet; they wait for the workflow that owns them (see ADR 022).
 - Cosmetic: the opportunity dropdowns (link opportunity, interaction form) show only the title. Showing "Company · Title" is left for Task 10.
+
+## Decisions recorded after review
+
+- Spec 5.3 (finalized by the owner and the control chat): a manually recorded application event never creates a RecruitingAction automatically; the user creates it explicitly in Phase 1A, and only a confirmed Gmail ReviewItem may create it in Phase 1B (Task 13). See [ADR 022](../adr/022-recruiting-actions-only-from-user-or-confirmed-review.md).
+- The DELETE grant on `contacts` is a narrow exception for merged contacts only; no other new table gains a DELETE it does not need.
 
 ## Git state
 
