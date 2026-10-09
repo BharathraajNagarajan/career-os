@@ -38,6 +38,8 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 (`make up` runs the same command where GNU Make is installed.)
 
+Run it, and rebuild it, from a clean shell: Docker Compose lets shell environment variables override `--env-file`, so variables such as `SESSION_SECRET` left over from test runs would silently replace the values in `.env`.
+
 This starts Postgres, runs the one-shot `migrate` service (creates the `career_os_app` role and applies Alembic migrations), then starts the API on http://localhost:8000, the worker, and the frontend on http://localhost:5173. The API and worker connect as `career_os_app`, never as the database owner. All ports bind to 127.0.0.1 only. The API reloads on backend changes and the frontend uses Vite hot reload.
 
 - API health: http://localhost:8000/healthz

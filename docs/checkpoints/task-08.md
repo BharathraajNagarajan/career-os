@@ -24,7 +24,7 @@ Also: timeline sources for interactions and recruiting-action events; frontend p
 - **Upcaster:** a version 1 note payload row loads, shows in the timeline and upcasts to v2 with `interaction_id: null`, for every note event type.
 - **Isolation:** every new route has a case in `test_isolation.py` (foreign ids 404, lists never leak, acting as B changes nothing of A's); body-borne foreign ids (interaction, action, rule, merge) are covered in `test_relationship_isolation.py`.
 - **Stack** (`docker compose up --build -d`): `migrate` exited 0 (0006 to 0007), `/healthz` 200. A script created a synthetic user and session as owner and showed through the API: a duplicate address refused with `contact_email_taken`; Sam linked to a company and an opportunity; an interaction with `OUTREACH_SENT` returned the application's new version 2 and the timeline listed `INTERACTION` (linkedin) next to `OUTREACH_SENT`; a stale application version gave 409; `attend_interview` without a time gave 422 `due_at_required`; a snoozed action was woken by the worker (events `CREATED user`, `SNOOZED user`, `WOKEN system`, job `succeeded`); the other two actions were completed and dismissed; merging Alex into Sam moved the company and opportunity links, the interaction and all three actions to the survivor, kept both addresses, made the merged id 404, and a repeat merge gave `contact_already_merged`; a global and a company-scoped cooldown rule were created. After account deletion (202) every count was 0 for all new tables, `domain_events`, `applications`, `opportunities`, `companies` and `sessions`.
-- **Live UI check:** pending the owner.
+- **Live UI check (owner): passed** on the Example Corp posting: adding contacts; the duplicate-email refusal; linking a company and an opportunity; a LinkedIn interaction with the channel kept after save; an interaction from the opportunity page with an Outreach sent application event (Interaction and Outreach sent rows in the timeline, stage unchanged); Attend interview and Custom actions; snooze moving to Snoozed and the wake job returning it to Open after the time passed; complete and dismiss moving to Done; global and company rules, with disable and delete surviving a refresh; and merging Alex into Sam (emails, links and both interactions moved, Alex gone, Sam on the opportunity panel).
 
 ## Changes outside the expected file set
 
@@ -51,6 +51,7 @@ Also: timeline sources for interactions and recruiting-action events; frontend p
 - `dict(result.tuples())` on a SQLAlchemy result is not a mapping of rows; the opportunity timeline returned 500 until a test across the new source caught it.
 - Postgres JSONB containment (`@>`) with the GIN index gives the "one contact per address" lookup without a separate table, and an advisory lock per user closes the check-then-insert race.
 - The structured logger drops any field not on its allow-list. The wake handler's `action_id` and `woken` fields were being dropped until they were added; only ids and flags were added, never names, emails or text.
+- The 403 `csrf_failed` seen during the UI check came from rebuilding the stack in a shell that had test variables loaded. Docker Compose lets shell environment variables override `--env-file`, so the api and worker got a test `SESSION_SECRET` (plus test Google client values and `SESSION_COOKIE_SECURE=false`) and refused the browser's CSRF cookie, which was signed with the real secret. Diagnosed by comparing secret hashes; fixed by rebuilding from a clean shell; no code change. The README now says to rebuild from a clean shell.
 
 ## Checks run and results
 
@@ -64,7 +65,7 @@ Also: timeline sources for interactions and recruiting-action events; frontend p
 | Frontend `npm run lint`, `typecheck`, `test`, `build` | Pass: 21 files, 145 tests |
 | Regenerated `openapi.json` and `schema.d.ts` | No diff |
 | Stack: migrate exit 0, `/healthz` 200, end-to-end script, deletion leaves no rows | Pass |
-| Live UI check | Pending the owner |
+| Live UI check (owner) | Pass |
 | GitHub Actions (backend, frontend, secrets) | Pending the push |
 
 ## Deviations from the frozen spec
@@ -94,15 +95,16 @@ None.
 
 ## Unresolved issues
 
-- Spec 5.3 says the system creates "complete assessment" and "attend interview" actions from a confirmed event. It is not clear whether an event the user records by hand counts, or only a confirmed ReviewItem from Gmail. Nothing was built; please decide before Task 12 or 14. Supersede and restore likewise have no trigger.
+- Spec 5.3 says the system creates "complete assessment" and "attend interview" actions from a confirmed event. It is not clear whether an event the user records by hand counts, or only a confirmed ReviewItem from Gmail. Nothing was built. Still open: to be decided by the owner and the control chat before Task 13. Supersede and restore likewise have no trigger.
+- Cosmetic: the opportunity dropdowns (link opportunity, interaction form) show only the title. Showing "Company · Title" is left for Task 10.
 
 ## Git state
 
 - Branch: `task-08-contacts-actions-rules`, from `main` at the merge of PR #6.
 - Commits: brief; migration and models; payload v2; services and API; backend tests; OpenAPI and types; pages; docs; this report.
 - PR: none opened (`gh` is not authenticated). Compare URL: https://github.com/BharathraajNagarajan/career-os/compare/main...task-08-contacts-actions-rules
-- CI: not yet pushed.
+- CI: see the push report in the conversation (head SHA and run id).
 
 ## Recommendation
 
-Approve once the live UI check passes and CI is green. The backend gates, the stack run and the frontend gates are clean; the one open design question (automatic action creation) does not block this task because it is deferred and documented.
+Approve once CI is green. The live UI check has passed. The backend gates, the stack run and the frontend gates are clean; the one open design question (automatic action creation) does not block this task because it is deferred and documented.
