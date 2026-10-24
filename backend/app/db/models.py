@@ -941,7 +941,7 @@ class Skill(UserOwned, StateVersioned, HasCreatedAt, Base):
             "char_length(canonical_name) BETWEEN 1 AND 100", name="canonical_name_length"
         ),
         CheckConstraint("normalized_key <> ''", name="normalized_key_not_empty"),
-        CheckConstraint("cardinality(aliases) <= 20", name="aliases_count"),
+        CheckConstraint("cardinality(aliases) <= 50", name="aliases_count"),
         CheckConstraint("char_length(user_note) <= 2000", name="user_note_length"),
         CheckConstraint(
             "gap_note IS NULL OR char_length(gap_note) <= 2000", name="gap_note_length"

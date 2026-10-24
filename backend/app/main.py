@@ -21,6 +21,7 @@ from app.core.errors import install_error_handlers
 from app.core.health import router as health_router
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.evidence.router import router as evidence_router
 from app.interactions.router import router as interactions_router
 from app.llm.router import router as llm_router
 from app.opportunities.router import router as opportunities_router
@@ -87,6 +88,7 @@ def create_app(
     app.include_router(interactions_router)
     app.include_router(actions_router)
     app.include_router(strategy_router)
+    app.include_router(evidence_router)
     register_interaction_source()
     register_action_event_source()
 

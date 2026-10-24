@@ -133,7 +133,7 @@ def test_skill_merge_and_gap_constraints(session: Session, user_id: uuid.UUID) -
     rejected(
         session,
         lambda: session.execute(
-            text("UPDATE skills SET aliases = ARRAY(SELECT 'a' || g FROM generate_series(1, 21) g)")
+            text("UPDATE skills SET aliases = ARRAY(SELECT 'a' || g FROM generate_series(1, 51) g)")
         ),
         "aliases_count",
     )
@@ -370,7 +370,7 @@ def test_only_claim_skill_links_can_be_deleted(session: Session, user_id: uuid.U
     session.execute(text("DELETE FROM claim_skills WHERE id = :id"), {"id": link_id})
     session.commit()
 
-    count = session.execute(text("SELECT count(*) FROM claim_skills")).scalar_one()
+    count: int = session.execute(text("SELECT count(*) FROM claim_skills")).scalar_one()
     assert count == 0
 
 
@@ -387,5 +387,5 @@ def test_account_deletion_removes_evidence_rows(
     owner_session.commit()
 
     for table in ("claims", "skills", "evidence_sources", "claim_skills"):
-        count = owner_session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()  # noqa: S608
+        count: int = owner_session.execute(text(f"SELECT count(*) FROM {table}")).scalar_one()  # noqa: S608
         assert count == 0, table

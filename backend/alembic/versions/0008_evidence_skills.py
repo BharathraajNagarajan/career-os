@@ -88,7 +88,7 @@ def upgrade() -> None:
             name=op.f("ck_skills_canonical_name_length"),
         ),
         sa.CheckConstraint("normalized_key <> ''", name=op.f("ck_skills_normalized_key_not_empty")),
-        sa.CheckConstraint("cardinality(aliases) <= 20", name=op.f("ck_skills_aliases_count")),
+        sa.CheckConstraint("cardinality(aliases) <= 50", name=op.f("ck_skills_aliases_count")),
         sa.CheckConstraint(
             "char_length(user_note) <= 2000", name=op.f("ck_skills_user_note_length")
         ),
