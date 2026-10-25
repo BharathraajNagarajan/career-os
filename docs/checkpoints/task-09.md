@@ -67,7 +67,7 @@ Also: settings `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS`, `EVIDENCE_MAX_CLAIMS`, `
 | Stack: `migrate` exit 0, `/healthz` 200, end-to-end script, deletion leaves no rows | Pass (twice, including the hostile resume) |
 | Live UI check (owner) | Not run yet: pending the owner |
 | Optional real extraction with an Anthropic key | Not run (declined by the owner for now) |
-| GitHub Actions (backend, frontend, secrets) | Pending the push |
+| GitHub Actions (backend, frontend, secrets) | Pass on `5682457` (run 40186520411) |
 
 ## Deviations from the frozen spec
 
@@ -128,7 +128,9 @@ If the control chat wants the API body to carry the sentence as well, that is a 
 
 ## Git state
 
-Branch `task-09-evidence-skills`, 8 commits ahead of `main` (brief, migration and models, domain and API, extraction and review handlers, frontend, docs, fake sample and ADR, checkpoint). Not pushed. No pull request. CI status: pending the push.
+Branch `task-09-evidence-skills`, pushed to `origin`. No pull request yet; compare URL: https://github.com/BharathraajNagarajan/career-os/compare/main...task-09-evidence-skills
+
+CI on code head `5682457` (run 40186520411, push): backend, frontend and secrets jobs all succeeded. The last commit only records this result in the checkpoint; its own run is listed in the hand-off message.
 
 ## Recommendation
 
