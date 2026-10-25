@@ -28,6 +28,7 @@ function resume(id: string, label: string, overrides: Partial<Resume> = {}): Res
     byte_size: 10,
     extraction_status: "succeeded",
     extraction_error_code: null,
+    evidence_extraction: { status: "not_requested", error_code: null },
     created_at: "2026-01-01T00:00:00Z",
     archived_at: null,
     ...overrides,

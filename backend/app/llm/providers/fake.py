@@ -2,7 +2,7 @@ import json
 import math
 import threading
 from collections import deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -60,8 +60,13 @@ def count_tokens(text: str) -> int:
 class FakeProvider:
     name = LlmProviderName.FAKE
 
-    def __init__(self, script: Iterable[Scripted] = ()) -> None:
+    def __init__(
+        self,
+        script: Iterable[Scripted] = (),
+        samples: Mapping[str, Callable[[ProviderRequest], Any]] | None = None,
+    ) -> None:
         self._script: deque[Scripted] = deque(script)
+        self._samples = dict(samples or {})
         self._lock = threading.Lock()
         self.requests: list[ProviderRequest] = []
 
@@ -71,6 +76,9 @@ class FakeProvider:
             if self._script:
                 return self._script.popleft()
         if request.json_schema is not None:
+            sample = self._samples.get(str(request.json_schema.get("title", "")))
+            if sample is not None:
+                return json.dumps(sample(request))
             return json.dumps(sample_from_schema(request.json_schema))
         return DEFAULT_REPLY
 

@@ -69,6 +69,9 @@ class Settings(BaseAppSettings):
     jd_min_chars: int = Field(default=200, ge=1)
     jd_max_chars: int = Field(default=50_000, gt=0, le=JD_MAX_CHARS_CEILING)
     jd_extraction_max_output_tokens: int = Field(default=6000, gt=0)
+    evidence_extraction_max_output_tokens: int = Field(default=8000, gt=0)
+    evidence_max_claims: int = Field(default=60, gt=0, le=100)
+    evidence_max_skills: int = Field(default=80, gt=0, le=100)
 
     @model_validator(mode="after")
     def _check_jd_limits(self) -> Self:

@@ -8,17 +8,24 @@ from sqlalchemy.orm import Session
 from app.auth.deps import current_auth, get_db_session, verify_csrf
 from app.auth.service import AuthContext
 from app.core.errors import ApiError, ErrorResponse
+from app.core.logging import get_logger
 from app.db.models import ReviewItem, ReviewStatus
+from app.db.tenancy import NotFound
 from app.db.versioning import ConcurrencyConflict
-from app.review.errors import InvalidPayload, InvalidTransition, NoHandler
+from app.review.errors import InvalidPayload, InvalidTransition, NoHandler, ReviewError
 from app.review.handlers import ReviewHandlerRegistry
 from app.review.schemas import (
+    BatchConfirmRequest,
+    BatchConfirmResponse,
+    BatchConfirmResult,
     ConfirmRequest,
     EditConfirmRequest,
     RejectRequest,
     ReviewItemResponse,
 )
 from app.review.service import ReviewService
+
+log = get_logger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/review-items",
@@ -84,6 +91,43 @@ def list_review_items(
         respond(service, item)
         for item in service.list(user_id=auth.user_id, status=status, limit=limit)
     ]
+
+
+def failure_code(exc: Exception) -> str:
+    if isinstance(exc, NotFound):
+        return "not_found"
+    if isinstance(exc, ConcurrencyConflict):
+        return "conflict"
+    if isinstance(exc, ReviewError):
+        return exc.code
+    if isinstance(exc, ApiError):
+        return exc.code
+    return "error"
+
+
+@router.post("/batch-confirm", response_model=BatchConfirmResponse)
+def batch_confirm(body: BatchConfirmRequest, auth: Auth, service: Service) -> BatchConfirmResponse:
+    results: list[BatchConfirmResult] = []
+    for entry in body.items:
+        try:
+            item = service.confirm(
+                user_id=auth.user_id,
+                item_id=entry.id,
+                expected_state_version=entry.expected_state_version,
+            )
+        except Exception as exc:
+            service.session.rollback()
+            code = failure_code(exc)
+            if code == "error":
+                log.error("batch_confirm_item_failed", error_type=type(exc).__name__)
+            results.append(BatchConfirmResult(id=entry.id, ok=False, error_code=code, item=None))
+        else:
+            results.append(
+                BatchConfirmResult(
+                    id=entry.id, ok=True, error_code=None, item=respond(service, item)
+                )
+            )
+    return BatchConfirmResponse(results=results)
 
 
 @router.get("/{item_id}", response_model=ReviewItemResponse, responses=NOT_FOUND)

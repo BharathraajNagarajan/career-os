@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -307,6 +307,40 @@ class RuleType(StrEnum):
     CONSTRAINT = "constraint"
     PREFERENCE = "preference"
     COOLDOWN = "cooldown"
+
+
+class ConfirmationStatus(StrEnum):
+    PROPOSED = "proposed"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+
+class EvidenceOrigin(StrEnum):
+    USER = "user"
+    EXTRACTED = "extracted"
+    CHAT = "chat"
+
+
+class EvidenceClass(StrEnum):
+    PROFESSIONAL = "professional"
+    ACADEMIC_RESEARCH = "academic_research"
+    PROJECT = "project"
+    LEARNING = "learning"
+
+
+class EngagementType(StrEnum):
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+    CONTRACT = "contract"
+    INTERNSHIP = "internship"
+    UNSPECIFIED = "unspecified"
+
+
+class EvidenceSourceType(StrEnum):
+    RESUME = "resume"
+    PROJECT_URL = "project_url"
+    USER_ASSERTION = "user_assertion"
+    ARTIFACT = "artifact"
 
 
 class User(HasId, HasCreatedAt, Base):
@@ -894,6 +928,145 @@ class StrategyRule(UserOwned, HasCreatedAt, Base):
     condition: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     active: Mapped[bool] = mapped_column(server_default=text("true"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Skill(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "skills"
+    __table_args__ = owned_table_args(
+        enum_check("confirmation_status", ConfirmationStatus),
+        enum_check("origin", EvidenceOrigin),
+        owned_fk("merged_into_skill_id", "skills"),
+        owned_fk("llm_run_id", "llm_runs"),
+        CheckConstraint(
+            "char_length(canonical_name) BETWEEN 1 AND 100", name="canonical_name_length"
+        ),
+        CheckConstraint("normalized_key <> ''", name="normalized_key_not_empty"),
+        CheckConstraint("cardinality(aliases) <= 50", name="aliases_count"),
+        CheckConstraint("char_length(user_note) <= 2000", name="user_note_length"),
+        CheckConstraint(
+            "gap_note IS NULL OR char_length(gap_note) <= 2000", name="gap_note_length"
+        ),
+        CheckConstraint("user_marked_gap OR gap_note IS NULL", name="gap_note_needs_gap"),
+        CheckConstraint(
+            "merged_into_skill_id IS NULL OR merged_into_skill_id <> id", name="merge_not_self"
+        ),
+        CheckConstraint(
+            "merged_into_skill_id IS NULL OR NOT user_marked_gap", name="merged_has_no_gap"
+        ),
+        Index(
+            "uq_skills_user_id_normalized_key",
+            "user_id",
+            "normalized_key",
+            unique=True,
+            postgresql_where=text("merged_into_skill_id IS NULL"),
+        ),
+        Index("ix_skills_user_id_updated_at", "user_id", "updated_at"),
+    )
+
+    canonical_name: Mapped[str] = mapped_column(Text)
+    normalized_key: Mapped[str] = mapped_column(Text)
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'::text[]"))
+    confirmation_status: Mapped[ConfirmationStatus] = mapped_column(
+        TextEnum(ConfirmationStatus), server_default=ConfirmationStatus.CONFIRMED.value
+    )
+    user_marked_gap: Mapped[bool] = mapped_column(server_default=text("false"))
+    gap_note: Mapped[str | None] = mapped_column(Text)
+    user_note: Mapped[str] = mapped_column(Text, server_default="")
+    origin: Mapped[EvidenceOrigin] = mapped_column(TextEnum(EvidenceOrigin))
+    merged_into_skill_id: Mapped[uuid.UUID | None]
+    llm_run_id: Mapped[uuid.UUID | None]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class Claim(UserOwned, StateVersioned, HasCreatedAt, Base):
+    __tablename__ = "claims"
+    __table_args__ = owned_table_args(
+        enum_check("evidence_class", EvidenceClass),
+        enum_check("engagement_type", EngagementType),
+        enum_check("confirmation_status", ConfirmationStatus),
+        enum_check("origin", EvidenceOrigin),
+        owned_fk("llm_run_id", "llm_runs"),
+        CheckConstraint("char_length(statement) BETWEEN 1 AND 2000", name="statement_length"),
+        CheckConstraint(
+            "organization_label IS NULL OR char_length(organization_label) BETWEEN 1 AND 200",
+            name="organization_label_length",
+        ),
+        CheckConstraint(
+            "(evidence_class = 'professional') = (engagement_type IS NOT NULL)",
+            name="engagement_type_only_professional",
+        ),
+        CheckConstraint(
+            "start_date IS NULL OR end_date IS NULL OR end_date >= start_date",
+            name="dates_ordered",
+        ),
+        Index("ix_claims_user_id_evidence_class", "user_id", "evidence_class"),
+        Index("ix_claims_user_id_created_at", "user_id", "created_at"),
+    )
+
+    statement: Mapped[str] = mapped_column(Text)
+    evidence_class: Mapped[EvidenceClass] = mapped_column(TextEnum(EvidenceClass))
+    engagement_type: Mapped[EngagementType | None] = mapped_column(TextEnum(EngagementType))
+    confirmation_status: Mapped[ConfirmationStatus] = mapped_column(
+        TextEnum(ConfirmationStatus), server_default=ConfirmationStatus.CONFIRMED.value
+    )
+    start_date: Mapped[date | None]
+    end_date: Mapped[date | None]
+    organization_label: Mapped[str | None] = mapped_column(Text)
+    origin: Mapped[EvidenceOrigin] = mapped_column(TextEnum(EvidenceOrigin))
+    llm_run_id: Mapped[uuid.UUID | None]
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class EvidenceSource(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "evidence_sources"
+    __table_args__ = owned_table_args(
+        enum_check("source_type", EvidenceSourceType),
+        owned_fk("claim_id", "claims"),
+        owned_fk("artifact_id", "artifacts"),
+        CheckConstraint(
+            "(source_type IN ('resume', 'artifact')) = (artifact_id IS NOT NULL)",
+            name="artifact_only_for_file_sources",
+        ),
+        CheckConstraint(
+            "(source_type = 'project_url') = (url IS NOT NULL)", name="url_only_for_project_url"
+        ),
+        CheckConstraint(
+            "(source_type = 'user_assertion') = (assertion_text IS NOT NULL)",
+            name="assertion_only_for_user_assertion",
+        ),
+        CheckConstraint(
+            "message_id IS NULL OR source_type = 'user_assertion'", name="message_scope"
+        ),
+        CheckConstraint("locator IS NULL OR char_length(locator) <= 500", name="locator_length"),
+        CheckConstraint("url IS NULL OR char_length(url) <= 2000", name="url_length"),
+        CheckConstraint(
+            "assertion_text IS NULL OR char_length(assertion_text) BETWEEN 1 AND 2000",
+            name="assertion_text_length",
+        ),
+        Index("ix_evidence_sources_user_id_claim_id", "user_id", "claim_id"),
+        Index("ix_evidence_sources_user_id_artifact_id", "user_id", "artifact_id"),
+    )
+
+    claim_id: Mapped[uuid.UUID]
+    source_type: Mapped[EvidenceSourceType] = mapped_column(TextEnum(EvidenceSourceType))
+    artifact_id: Mapped[uuid.UUID | None]
+    message_id: Mapped[uuid.UUID | None]
+    locator: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    assertion_text: Mapped[str | None] = mapped_column(Text)
+
+
+class ClaimSkill(UserOwned, HasCreatedAt, Base):
+    __tablename__ = "claim_skills"
+    __table_args__ = owned_table_args(
+        owned_fk("claim_id", "claims"),
+        owned_fk("skill_id", "skills"),
+        UniqueConstraint("user_id", "claim_id", "skill_id"),
+        Index("ix_claim_skills_user_id_skill_id", "user_id", "skill_id"),
+    )
+
+    claim_id: Mapped[uuid.UUID]
+    skill_id: Mapped[uuid.UUID]
 
 
 metadata = Base.metadata

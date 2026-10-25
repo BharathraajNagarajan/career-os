@@ -7,6 +7,7 @@ from app.llm.prompts.catalog import default_registry
 from app.llm.prompts.registry import PromptRegistry
 from app.llm.providers.base import ModelProvider
 from app.llm.providers.fake import FakeProvider
+from app.llm.providers.fake_samples import evidence_extraction_sample
 
 
 def build_provider(settings: Settings) -> ModelProvider:
@@ -15,7 +16,7 @@ def build_provider(settings: Settings) -> ModelProvider:
 
         assert settings.anthropic_api_key is not None  # noqa: S101
         return AnthropicProvider(settings.anthropic_api_key.get_secret_value())
-    return FakeProvider()
+    return FakeProvider(samples={"EvidenceExtraction": evidence_extraction_sample})
 
 
 def build_gateway(

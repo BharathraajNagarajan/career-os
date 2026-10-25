@@ -1,9 +1,14 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx2
 import pytest
+from pydantic import SecretStr
 
+from app.config import Settings
+from app.llm.factory import build_provider
+from app.llm.prompts.evidence_extract import EvidenceExtraction
 from app.llm.providers.anthropic import AnthropicProvider
 from app.llm.providers.base import (
     ProviderError,
@@ -14,6 +19,7 @@ from app.llm.providers.base import (
 )
 from app.llm.providers.fake import FakeProvider, StreamFailure, sample_from_schema
 
+APP = Path(__file__).resolve().parents[1] / "app"
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -238,3 +244,34 @@ def test_anthropic_stream_yields_deltas_then_usage() -> None:
     end = chunks[-1]
     assert isinstance(end, StreamEnd)
     assert end.usage == Usage(input_tokens=12, output_tokens=2)
+
+
+def test_the_evidence_sample_is_only_reachable_through_the_fake_provider(
+    settings: Settings,
+) -> None:
+    line = "Built sample widgets for fictional customers."
+    resume = f'<untrusted_content label="resume">\n{line}\n</untrusted_content>'
+    schema = EvidenceExtraction.model_json_schema()
+    asked = request(user=resume, json_schema=schema)
+
+    fake = build_provider(settings.model_copy(update={"llm_provider": "fake"}))
+    answer = json.loads(fake.complete(asked).text)
+    plain = json.loads(FakeProvider().complete(asked).text)
+    real = build_provider(
+        settings.model_copy(
+            update={"llm_provider": "anthropic", "anthropic_api_key": SecretStr("not-a-real-key")}
+        )
+    )
+
+    assert [claim["statement"] for claim in answer["claims"]] == [
+        "Built sample widgets for fictional customers."
+    ]
+    assert plain == {"claims": [], "skills": []}
+    assert isinstance(real, AnthropicProvider)
+    assert not isinstance(real, FakeProvider)
+    importers = [
+        path.name
+        for path in APP.rglob("*.py")
+        if "fake_samples" in path.read_text(encoding="utf-8") and path.name != "fake_samples.py"
+    ]
+    assert importers == ["factory.py"]

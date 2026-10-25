@@ -30,8 +30,12 @@ PostgreSQL 16 is the system of record and the job queue (ADR-002, ADR-006). Acce
 | `interactions` | SELECT, INSERT, and UPDATE on `contact_id` only | History: the summary cannot change and nothing is deleted; `contact_id` can move only so a merge can re-point rows. No DELETE |
 | `recruiting_actions` | SELECT, INSERT, UPDATE | State machine; no DELETE |
 | `qualifications` | SELECT, INSERT, DELETE, and UPDATE on `kind`, `ordinal`, `category`, `skill_keys`, `min_years`, `is_hard_constraint`, `updated_at` only | "Verbatim text always kept": `text_verbatim`, `origin`, `llm_run_id`, the parent link and the owner cannot change by privilege. Users may delete a requirement line |
+| `skills` | SELECT, INSERT, and UPDATE on `canonical_name`, `normalized_key`, `aliases`, `confirmation_status`, `user_marked_gap`, `gap_note`, `user_note`, `merged_into_skill_id`, `state_version`, `updated_at` only | Provenance (`origin`, `llm_run_id`) is immutable. No DELETE: a merged skill stays as a redirect |
+| `claims` | SELECT, INSERT, and UPDATE on `statement`, `evidence_class`, `engagement_type`, `confirmation_status`, `start_date`, `end_date`, `organization_label`, `state_version`, `updated_at` only | Provenance is immutable. No DELETE: a claim is rejected, not erased |
+| `evidence_sources` | SELECT, INSERT | A source is a record and is never edited or removed |
+| `claim_skills` | SELECT, INSERT, DELETE, and UPDATE on `skill_id` only | Unlinking is legitimate; `skill_id` moves only so a merge can re-point links |
 
-`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes`, `resume_lanes`, `llm_runs`, `review_items`, `qualifications`, `applications`, `opportunities`, `companies`, `contacts`, `contact_companies`, `contact_opportunities`, `interactions`, `recruiting_actions` and `strategy_rules`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
+`delete_user_account(target uuid) RETURNS boolean` (migration 0002) is `SECURITY DEFINER`, owned by the migration owner, with `search_path` pinned to `pg_catalog, public`. `EXECUTE` is revoked from `PUBLIC` and granted to `career_os_app`. It deletes the `users` row only when `status = 'deletion_requested'`; `ON DELETE CASCADE` then removes the user's `domain_events`, `jobs`, `auth_identities`, `sessions`, `profiles`, `artifacts`, `resumes`, `resume_lanes`, `llm_runs`, `review_items`, `qualifications`, `applications`, `opportunities`, `companies`, `contacts`, `contact_companies`, `contact_opportunities`, `interactions`, `recruiting_actions`, `strategy_rules`, `skills`, `claims`, `evidence_sources` and `claim_skills`. Stored files are removed earlier by a deletion hook ([artifacts.md](artifacts.md)). See [auth.md](auth.md).
 
 The bootstrap command creates `career_os_app`, or resets its password if it exists, with `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`. It is idempotent. Table grants live in the migration that creates each table, so they are versioned and reviewed with the schema. Roles are cluster-wide: bootstrapping any database on the same server, including a test database, sets the same role's password, so every environment on one server must share `APP_DB_PASSWORD`. The password is interpolated into connection URLs and must be URL-safe.
 
@@ -92,6 +96,12 @@ Events written by Task 8 (all in `domain_events` with typed payloads at `schema_
 | recruiting_action | `RECRUITING_ACTION_CREATED`, `_EDITED`, `_SNOOZED`, `_WOKEN`, `_COMPLETED`, `_DISMISSED`, `_SUPERSEDED`, `_RESTORED` | create, edit and every transition, with the actor |
 
 The application note payload (`NOTE_ADDED`, `OUTREACH_SENT` and the other note-shaped types) is now `schema_version` 2 with an optional `interaction_id`; the registered v1 to v2 upcaster keeps older rows loading.
+
+## Skills, claims and evidence (migration 0008)
+
+Four new tables, all user-owned with composite foreign keys: `skills`, `claims`, `evidence_sources`, `claim_skills`. The reasoning, the checks, the partial unique index on a skill's normalized name, the redirect column for merges and the events are in [evidence-skills.md](evidence-skills.md). The grants above are the privilege story: provenance columns are immutable, sources are insert-only, nothing but a claim-skill link can be deleted. Tests prove every enum check, the engagement-type rule, the source-shape rules, composite foreign keys, the uniqueness rules, every grant and the account-deletion cascade.
+
+Events written by Task 9 (typed payloads at `schema_version` 1, ids and enum values only): `SKILL_ADDED`, `SKILL_CONFIRMED`, `SKILL_MERGED`, `SKILL_GAP_MARKED`, `SKILL_GAP_CLEARED`, `CLAIM_CONFIRMED`, `CLAIM_EDITED`, `CLAIM_REJECTED`, `EVIDENCE_CLASS_CHANGED`.
 
 ## Tenancy and INV-18
 

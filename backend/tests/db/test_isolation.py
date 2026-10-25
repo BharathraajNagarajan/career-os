@@ -283,6 +283,46 @@ def assert_a_rule_untouched(personas: Personas) -> None:
     ]
 
 
+SKILLS = "/api/v1/skills"
+CLAIMS = "/api/v1/claims"
+A_SKILL_NAME = "Persona A skill name"
+A_CLAIM_STATEMENT = "Persona A claim statement"
+UNKNOWN_ID = "00000000-0000-4000-8000-000000000001"
+
+
+def skill_foreign(personas: Personas) -> dict[str, str]:
+    return {"skill_id": personas.a_ids["skill"]}
+
+
+def claim_foreign(personas: Personas) -> dict[str, str]:
+    return {"claim_id": personas.a_ids["claim"]}
+
+
+def claim_skill_foreign(personas: Personas) -> dict[str, str]:
+    return {"claim_id": personas.a_ids["claim"], "skill_id": personas.a_ids["skill"]}
+
+
+def assert_a_evidence_untouched(personas: Personas) -> None:
+    skills = personas.a.client.get(SKILLS, params={"include_merged": True}).json()
+    assert [(row["id"], row["canonical_name"], row["user_marked_gap"]) for row in skills] == [
+        (personas.a_ids["skill"], A_SKILL_NAME, False)
+    ]
+    assert skills[0]["state_version"] == int(personas.a_ids["skill_version"])
+    assert skills[0]["merged_into_skill_id"] is None
+    claims = personas.a.client.get(CLAIMS).json()
+    assert [(row["id"], row["statement"], row["evidence_class"]) for row in claims] == [
+        (personas.a_ids["claim"], A_CLAIM_STATEMENT, "project")
+    ]
+    assert claims[0]["state_version"] == int(personas.a_ids["claim_version"])
+    assert [skill["id"] for skill in claims[0]["skills"]] == [personas.a_ids["skill"]]
+    assert len(claims[0]["sources"]) == 1
+
+
+def assert_a_resume_has_no_extraction(personas: Personas) -> None:
+    assert a_resume(personas)["evidence_extraction"]["status"] == "not_requested"
+    assert_a_resume_untouched(personas)
+
+
 PROTECTED: dict[Route_, IsolationCase] = {
     ("GET", "/api/v1/auth/me"): IsolationCase(
         "/api/v1/auth/me",
@@ -398,6 +438,13 @@ PROTECTED: dict[Route_, IsolationCase] = {
         REVIEW_ITEMS + "/{item_id}/reject",
         body=REVIEW_BODY,
         foreign_params=REVIEW_FOREIGN,
+        a_untouched=assert_a_review_item_untouched,
+    ),
+    ("POST", REVIEW_ITEMS + "/batch-confirm"): IsolationCase(
+        REVIEW_ITEMS + "/batch-confirm",
+        body={
+            "items": [{"id": "00000000-0000-4000-8000-000000000001", "expected_state_version": 1}]
+        },
         a_untouched=assert_a_review_item_untouched,
     ),
     ("POST", OPPORTUNITIES + "/ingest"): IsolationCase(
@@ -668,6 +715,114 @@ PROTECTED: dict[Route_, IsolationCase] = {
         foreign_params=rule_foreign,
         a_untouched=assert_a_rule_untouched,
     ),
+    ("POST", "/api/v1/resumes/{resume_id}/extract-evidence"): IsolationCase(
+        "/api/v1/resumes/{resume_id}/extract-evidence",
+        foreign_params=lambda personas: {"resume_id": personas.a_ids["resume"]},
+        a_untouched=assert_a_resume_has_no_extraction,
+    ),
+    ("GET", SKILLS): IsolationCase(
+        SKILLS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["skill"]},
+    ),
+    ("POST", SKILLS): IsolationCase(
+        SKILLS,
+        body={"canonical_name": "Persona B added skill"},
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("GET", SKILLS + "/{skill_id}"): IsolationCase(
+        SKILLS + "/{skill_id}",
+        foreign_params=skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("PATCH", SKILLS + "/{skill_id}"): IsolationCase(
+        SKILLS + "/{skill_id}",
+        body={"expected_state_version": 1, "canonical_name": "hijacked"},
+        foreign_params=skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", SKILLS + "/{skill_id}/merge"): IsolationCase(
+        SKILLS + "/{skill_id}/merge",
+        body={
+            "merged_id": UNKNOWN_ID,
+            "expected_state_version": 1,
+            "expected_merged_state_version": 1,
+        },
+        foreign_params=skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", SKILLS + "/{skill_id}/mark-gap"): IsolationCase(
+        SKILLS + "/{skill_id}/mark-gap",
+        body={"expected_state_version": 1, "note": "planted"},
+        foreign_params=skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", SKILLS + "/{skill_id}/clear-gap"): IsolationCase(
+        SKILLS + "/{skill_id}/clear-gap",
+        body={"expected_state_version": 1},
+        foreign_params=skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("GET", CLAIMS): IsolationCase(
+        CLAIMS,
+        list_ids=lambda body: {row["id"] for row in body},
+        a_foreign_ids=lambda personas: {personas.a_ids["claim"]},
+    ),
+    ("POST", CLAIMS): IsolationCase(
+        CLAIMS,
+        body={
+            "statement": "Persona B claim",
+            "evidence_class": "project",
+            "skill_ids": [UNKNOWN_ID],
+            "sources": [{"source_type": "user_assertion", "assertion_text": "planted"}],
+        },
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("GET", CLAIMS + "/{claim_id}"): IsolationCase(
+        CLAIMS + "/{claim_id}",
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("PATCH", CLAIMS + "/{claim_id}"): IsolationCase(
+        CLAIMS + "/{claim_id}",
+        body={"expected_state_version": 1, "statement": "hijacked"},
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", CLAIMS + "/{claim_id}/classification"): IsolationCase(
+        CLAIMS + "/{claim_id}/classification",
+        body={
+            "expected_state_version": 1,
+            "evidence_class": "professional",
+            "engagement_type": "full_time",
+            "confirm_change": True,
+        },
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", CLAIMS + "/{claim_id}/reject"): IsolationCase(
+        CLAIMS + "/{claim_id}/reject",
+        body={"expected_state_version": 1},
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", CLAIMS + "/{claim_id}/skills"): IsolationCase(
+        CLAIMS + "/{claim_id}/skills",
+        body={"skill_id": UNKNOWN_ID},
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("DELETE", CLAIMS + "/{claim_id}/skills/{skill_id}"): IsolationCase(
+        CLAIMS + "/{claim_id}/skills/{skill_id}",
+        foreign_params=claim_skill_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
+    ("POST", CLAIMS + "/{claim_id}/sources"): IsolationCase(
+        CLAIMS + "/{claim_id}/sources",
+        body={"source_type": "user_assertion", "assertion_text": "planted"},
+        foreign_params=claim_foreign,
+        a_untouched=assert_a_evidence_untouched,
+    ),
     ("POST", "/api/v1/account/deletion"): IsolationCase(
         "/api/v1/account/deletion",
         body={"confirm": "DELETE MY ACCOUNT"},
@@ -785,6 +940,31 @@ def seed_relationships(persona: Persona, *, tag: str) -> dict[str, str]:
     }
 
 
+def seed_evidence(persona: Persona, *, tag: str) -> dict[str, str]:
+    skill = persona.request(
+        "POST",
+        SKILLS,
+        json={"canonical_name": A_SKILL_NAME if tag == "a" else f"Persona {tag} skill name"},
+    ).json()
+    claim = persona.request(
+        "POST",
+        CLAIMS,
+        json={
+            "statement": A_CLAIM_STATEMENT if tag == "a" else f"Persona {tag} claim statement",
+            "evidence_class": "project",
+            "skill_ids": [skill["id"]],
+            "sources": [{"source_type": "user_assertion", "assertion_text": f"{tag} words"}],
+        },
+    ).json()
+    skill = persona.request("GET", f"{SKILLS}/{skill['id']}").json()
+    return {
+        "skill": skill["id"],
+        "skill_version": str(skill["state_version"]),
+        "claim": claim["id"],
+        "claim_version": str(claim["state_version"]),
+    }
+
+
 def seed(persona: Persona, *, label: str, headline: str, lane: str) -> dict[str, str]:
     lane_row = create_lane(persona, lane)
     resume = upload(
@@ -817,6 +997,8 @@ def personas(
     seed_application(b, b_ids)
     a_ids.update(seed_relationships(a, tag="a"))
     seed_relationships(b, tag="b")
+    a_ids.update(seed_evidence(a, tag="a"))
+    seed_evidence(b, tag="b")
     for owner_persona in (a, b):
         gateway, _ = make_gateway(app_sessions, script=[VALID])
         structured(gateway, owner_persona.user_id)

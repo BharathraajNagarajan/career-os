@@ -30,6 +30,8 @@ describe("Layout", () => {
     expect(links).toEqual([
       ["Profile", "/profile"],
       ["Resumes", "/resumes"],
+      ["Skills", "/skills"],
+      ["Evidence", "/claims"],
       ["Lanes", "/lanes"],
       ["Opportunities", "/opportunities"],
       ["Applications", "/applications"],

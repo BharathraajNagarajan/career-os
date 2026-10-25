@@ -6,7 +6,7 @@ Created by Bharathraaj Nagarajan
 
 ## Status
 
-Phase 1A, Task 8 (contacts, interactions, recruiting actions and strategy rules; builds on the Task 7 state machines and the JD ingestion of Task 6). See [docs/architecture/contacts-actions-rules.md](docs/architecture/contacts-actions-rules.md). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
+Phase 1A, Task 9 (evidence and the Skill Inventory: resume extraction into review items, skills, claims, derived badges, gap marking, merge). See [docs/architecture/evidence-skills.md](docs/architecture/evidence-skills.md). Task 8 (contacts, interactions, recruiting actions and strategy rules) is described in [docs/architecture/contacts-actions-rules.md](docs/architecture/contacts-actions-rules.md). The frozen specification is [docs/spec/phase-0-spec.md](docs/spec/phase-0-spec.md); decisions are recorded in [docs/adr](docs/adr/README.md).
 
 ## Architecture in one paragraph
 
@@ -109,6 +109,9 @@ Settings come only from environment variables; the application never reads a `.e
 | `JD_MIN_CHARS` | `200` | Shortest accepted pasted job description (after trimming); shorter gets 422 `jd_too_short` |
 | `JD_MAX_CHARS` | `50000` | Longest accepted pasted job description (at most 200000); longer gets 422 `jd_too_long` |
 | `JD_EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output ceiling for the one extraction call per pasted job description |
+| `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS` | `8000` | Output ceiling for the one evidence-extraction call per resume |
+| `EVIDENCE_MAX_CLAIMS` | `60` | Most claim proposals kept from one extraction (1 to 100); the rest are dropped and counted |
+| `EVIDENCE_MAX_SKILLS` | `80` | Most skill proposals kept from one extraction (1 to 100) |
 
 ## Opportunities and job descriptions
 
@@ -119,6 +122,10 @@ Paste a job description on the Opportunities page (optionally with the source UR
 On an opportunity you can Save, Skip, Apply or Close it; the server says which of those are allowed and the page only shows those. Apply records that you applied (nothing is sent anywhere) and creates the application in the same transaction. On the application you record what happened (assessment received, interview scheduled, rejected and so on, dated when it really happened, even in the past), void a mistaken entry, or reopen a closed application. History is append-only: voiding adds a correction event and the entry stays in the timeline, marked. The stage is always recomputed from the events, so it cannot disagree with the history. No model call is involved. See [docs/architecture/state-machines.md](docs/architecture/state-machines.md).
 
 ## Database, migrations and database tests
+
+### Evidence and skills
+
+On a resume you can press **Extract evidence** (or tick the box when you upload). That is the only thing that makes a model call, and it runs once per resume unless the last attempt failed. The model proposes claims (one statement copied from your resume, a class and an engagement type) and skills; they wait on the **Review** page, grouped by resume, where you confirm, edit or reject them one at a time or select several and **Confirm selected**. Nothing becomes a skill or a piece of evidence until you confirm it. Engagement type is `unspecified` unless the resume's own words say otherwise, an internship is never shown as full-time, and only you can change a class or engagement type, after a confirmation that names the old and new values. The **Skills** page shows each skill with the kinds of evidence behind it (derived, never stored), where the evidence came from and which resumes mention it. A skill with no evidence is **Not recorded**, which is not a gap; only you can mark a gap, and that is refused while you have confirmed professional, academic or project evidence for the skill. You can add, rename, give other names to and merge skills. With the default fake provider the extraction returns no proposals; use `LLM_PROVIDER=anthropic` and your own key for a real run. See [docs/architecture/evidence-skills.md](docs/architecture/evidence-skills.md).
 
 See [docs/architecture/database.md](docs/architecture/database.md) for roles and grants, conventions, tenancy rules and the job lifecycle.
 
@@ -146,7 +153,7 @@ One profile per user (constraints, target roles, communication preferences), imm
 
 ## Model gateway and review items
 
-All model work goes through one internal gateway: tiers and prices from configuration, versioned prompts, a recorded `llm_runs` row per call, one repair retry for invalid structured output, and a per-user daily cost cap that reserves the worst case before a call and settles the real cost after. The review framework holds proposals until the user confirms, edits or rejects them, and confirming runs the same command a manual action would. The first producer is JD extraction (below); resume extraction arrives in Task 9. See [docs/architecture/llm.md](docs/architecture/llm.md) and [docs/architecture/review.md](docs/architecture/review.md). The Anthropic placeholders in `.env.example` are commented out; copy them in only when you want a real call.
+All model work goes through one internal gateway: tiers and prices from configuration, versioned prompts, a recorded `llm_runs` row per call, one repair retry for invalid structured output, and a per-user daily cost cap that reserves the worst case before a call and settles the real cost after. The review framework holds proposals until the user confirms, edits or rejects them, and confirming runs the same command a manual action would. The producers are JD extraction and resume evidence extraction (both below). See [docs/architecture/llm.md](docs/architecture/llm.md) and [docs/architecture/review.md](docs/architecture/review.md). The Anthropic placeholders in `.env.example` are commented out; copy them in only when you want a real call.
 
 ## Logging
 

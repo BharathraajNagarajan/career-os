@@ -15,6 +15,7 @@ from app.auth.deps import current_auth, get_db_session, verify_csrf
 from app.auth.service import AuthContext
 from app.config import Settings
 from app.core.errors import ApiError, ErrorResponse
+from app.db.models import Artifact, Resume
 from app.resumes.schemas import (
     LaneCreate,
     LanePatch,
@@ -46,6 +47,7 @@ UPLOAD_SCHEMA = {
                         "file": {"type": "string", "format": "binary"},
                         "label": {"type": "string", "maxLength": 120},
                         "lane_id": {"type": "string", "format": "uuid"},
+                        "extract_evidence": {"type": "boolean"},
                     },
                 }
             }
@@ -80,6 +82,13 @@ def lane_service(session: DbSession) -> LaneService:
 
 Resumes = Annotated[ResumeService, Depends(resume_service)]
 Lanes = Annotated[LaneService, Depends(lane_service)]
+
+
+def summarize(
+    service: ResumeService, user_id: uuid.UUID, resume: Resume, artifact: Artifact
+) -> ResumeSummary:
+    states = service.evidence_states(user_id=user_id, resume_ids=[resume.id])
+    return ResumeSummary.build(resume, artifact, states[resume.id])
 
 
 def parse_lane_id(raw: str | None) -> uuid.UUID | None:
@@ -119,26 +128,30 @@ async def upload_resume(
             original_filename=received.filename,
             label=received.fields.get("label"),
             lane_id=lane_id,
+            extract_evidence=received.fields.get("extract_evidence", "").lower()
+            in {"true", "1", "on"},
         )
     except UploadRejected as exc:
         raise ApiError(exc.status_code, exc.code) from exc
     finally:
         received.spool.close()
-    return ResumeSummary.build(resume, artifact)
+    return summarize(service, auth.user_id, resume, artifact)
 
 
 @router.get("/resumes", response_model=list[ResumeSummary])
 def list_resumes(auth: Auth, service: Resumes) -> list[ResumeSummary]:
-    return [
-        ResumeSummary.build(resume, artifact)
-        for resume, artifact in service.list(user_id=auth.user_id)
-    ]
+    rows = service.list(user_id=auth.user_id)
+    states = service.evidence_states(
+        user_id=auth.user_id, resume_ids=[resume.id for resume, _ in rows]
+    )
+    return [ResumeSummary.build(resume, artifact, states[resume.id]) for resume, artifact in rows]
 
 
 @router.get("/resumes/{resume_id}", response_model=ResumeDetail, responses=NOT_FOUND)
 def get_resume(resume_id: uuid.UUID, auth: Auth, service: Resumes) -> ResumeDetail:
     resume, artifact = service.get(user_id=auth.user_id, resume_id=resume_id)
-    return ResumeDetail.build_detail(resume, artifact)
+    states = service.evidence_states(user_id=auth.user_id, resume_ids=[resume.id])
+    return ResumeDetail.build_detail(resume, artifact, states[resume.id])
 
 
 @router.patch(
@@ -150,7 +163,7 @@ def patch_resume(
     resume_id: uuid.UUID, body: ResumePatch, auth: Auth, service: Resumes
 ) -> ResumeSummary:
     resume, artifact = service.patch(user_id=auth.user_id, resume_id=resume_id, data=body)
-    return ResumeSummary.build(resume, artifact)
+    return summarize(service, auth.user_id, resume, artifact)
 
 
 @router.post("/resumes/{resume_id}/archive", response_model=ResumeSummary, responses=NOT_FOUND)
@@ -158,7 +171,7 @@ def archive_resume(resume_id: uuid.UUID, auth: Auth, service: Resumes) -> Resume
     resume, artifact = service.set_archived(
         user_id=auth.user_id, resume_id=resume_id, archived=True
     )
-    return ResumeSummary.build(resume, artifact)
+    return summarize(service, auth.user_id, resume, artifact)
 
 
 @router.post("/resumes/{resume_id}/unarchive", response_model=ResumeSummary, responses=NOT_FOUND)
@@ -166,7 +179,19 @@ def unarchive_resume(resume_id: uuid.UUID, auth: Auth, service: Resumes) -> Resu
     resume, artifact = service.set_archived(
         user_id=auth.user_id, resume_id=resume_id, archived=False
     )
-    return ResumeSummary.build(resume, artifact)
+    return summarize(service, auth.user_id, resume, artifact)
+
+
+@router.post(
+    "/resumes/{resume_id}/extract-evidence",
+    status_code=202,
+    response_model=ResumeSummary,
+    responses={**NOT_FOUND, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+def extract_evidence(resume_id: uuid.UUID, auth: Auth, service: Resumes) -> ResumeSummary:
+    service.request_evidence_extraction(user_id=auth.user_id, resume_id=resume_id)
+    resume, artifact = service.get(user_id=auth.user_id, resume_id=resume_id)
+    return summarize(service, auth.user_id, resume, artifact)
 
 
 def attachment_disposition(filename: str) -> str:

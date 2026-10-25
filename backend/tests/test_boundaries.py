@@ -127,3 +127,44 @@ def test_no_model_ids_or_prices_are_hard_coded_in_application_code() -> None:
     ]
 
     assert offenders == []
+
+
+def test_resume_extraction_can_only_create_review_items() -> None:
+    forbidden_models = {"Claim", "Skill", "EvidenceSource", "ClaimSkill"}
+    forbidden_commands = {
+        "create_claim",
+        "add_skill",
+        "ensure_skill",
+        "change_classification",
+        "edit_claim",
+        "link_skill",
+        "add_source",
+    }
+    path = APP / "evidence" / "extraction.py"
+
+    imports = imported(path)
+
+    assert not [
+        name
+        for module, names in imports
+        for name in names
+        if (module == "app.db.models" and name in forbidden_models)
+        or (module == "app.evidence.commands" and name in forbidden_commands)
+    ]
+    assert not [module for module, _ in imports if module == "app.evidence.service"]
+
+
+def test_only_the_explicit_mark_gap_command_can_set_the_gap_marker() -> None:
+    pattern = re.compile(r"user_marked_gap[\"']?\s*[:=]\s*True")
+    files = [path for path in python_files(APP) if pattern.search(path.read_text(encoding="utf-8"))]
+    commands = APP / "evidence" / "commands.py"
+    source = commands.read_text(encoding="utf-8")
+    functions = [
+        node.name
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef)
+        and pattern.search(ast.get_source_segment(source, node) or "")
+    ]
+
+    assert files == [commands]
+    assert functions == ["mark_gap"]

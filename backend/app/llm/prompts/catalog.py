@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 
 from app.db.models import LlmPurpose, LlmTier
+from app.llm.prompts.evidence_extract import (
+    EVIDENCE_EXTRACT,
+    EVIDENCE_EXTRACT_SYSTEM,
+    EVIDENCE_EXTRACT_USER,
+    EvidenceExtraction,
+)
 from app.llm.prompts.jd_extract import (
     JD_EXTRACT,
     JD_EXTRACT_SYSTEM,
@@ -55,6 +61,18 @@ def default_registry() -> PromptRegistry:
             user=JD_EXTRACT_USER,
             output_schema=JdExtraction,
             untrusted_variables=frozenset({"jd"}),
+        )
+    )
+    registry.register(
+        Prompt(
+            prompt_id=EVIDENCE_EXTRACT,
+            version=1,
+            purpose=LlmPurpose.EXTRACT_RESUME,
+            tier=LlmTier.FAST,
+            system=EVIDENCE_EXTRACT_SYSTEM,
+            user=EVIDENCE_EXTRACT_USER,
+            output_schema=EvidenceExtraction,
+            untrusted_variables=frozenset({"resume"}),
         )
     )
     return registry

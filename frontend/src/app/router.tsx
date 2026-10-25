@@ -2,6 +2,8 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { Actions } from "../routes/Actions";
 import { Applications } from "../routes/Applications";
+import { ClaimDetail } from "../routes/ClaimDetail";
+import { Claims } from "../routes/Claims";
 import { Companies } from "../routes/Companies";
 import { ContactDetail } from "../routes/ContactDetail";
 import { Contacts } from "../routes/Contacts";
@@ -12,6 +14,8 @@ import { Opportunities } from "../routes/Opportunities";
 import { Profile } from "../routes/Profile";
 import { Resumes } from "../routes/Resumes";
 import { Review } from "../routes/Review";
+import { SkillDetail } from "../routes/SkillDetail";
+import { Skills } from "../routes/Skills";
 import { Settings } from "../routes/Settings";
 import { SignIn } from "../routes/SignIn";
 import { StrategyRules } from "../routes/StrategyRules";
@@ -39,6 +43,10 @@ export const router = createBrowserRouter([
           { path: "contacts/:contactId", element: <ContactDetail /> },
           { path: "actions", element: <Actions /> },
           { path: "rules", element: <StrategyRules /> },
+          { path: "skills", element: <Skills /> },
+          { path: "skills/:skillId", element: <SkillDetail /> },
+          { path: "claims", element: <Claims /> },
+          { path: "claims/:claimId", element: <ClaimDetail /> },
           { path: "review", element: <Review /> },
           { path: "settings", element: <Settings /> },
         ],

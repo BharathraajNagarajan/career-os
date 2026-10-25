@@ -2,6 +2,7 @@ import { apiFetch } from "./client";
 import type { components } from "./schema";
 
 export type ReviewItem = components["schemas"]["ReviewItemResponse"];
+export type BatchConfirmResult = components["schemas"]["BatchConfirmResult"];
 
 export const REVIEW_ITEMS_KEY = ["review-items", "pending"] as const;
 
@@ -33,4 +34,14 @@ export function editConfirmReviewItem(
 
 export function rejectReviewItem(item: ReviewItem, note: string): Promise<ReviewItem> {
   return decide(item, "reject", note.trim() === "" ? {} : { note: note.trim() });
+}
+
+export async function batchConfirmReviewItems(items: ReviewItem[]): Promise<BatchConfirmResult[]> {
+  const response = await apiFetch("/api/v1/review-items/batch-confirm", {
+    method: "POST",
+    json: {
+      items: items.map((item) => ({ id: item.id, expected_state_version: item.state_version })),
+    },
+  });
+  return ((await response.json()) as components["schemas"]["BatchConfirmResponse"]).results;
 }

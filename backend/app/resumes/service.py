@@ -19,6 +19,12 @@ from app.db.models import (
     ResumeStatus,
 )
 from app.db.tenancy import resolve_owned
+from app.evidence.extraction_requests import (
+    enqueue_extraction,
+    extraction_states,
+    request_extraction,
+)
+from app.evidence.schemas import EvidenceExtractionState
 from app.jobs.queue import enqueue
 from app.resumes.parse_job import PARSE_RESUME_JOB, ParseResumePayload, parse_unique_key
 from app.resumes.repository import ArtifactRepository, LaneRepository, ResumeRepository
@@ -43,6 +49,7 @@ class ResumeService:
         original_filename: str | None,
         label: str | None,
         lane_id: uuid.UUID | None,
+        extract_evidence: bool = False,
     ) -> tuple[Resume, Artifact]:
         sniffed = sniff(spool)
         filename = sanitize_filename(original_filename)
@@ -81,6 +88,8 @@ class ResumeService:
                 user_id=user_id,
                 unique_key=parse_unique_key(artifact_id),
             )
+            if extract_evidence:
+                enqueue_extraction(self.session, user_id=user_id, resume_id=resume.id)
             if lane_id is not None:
                 self.lanes.touch(user_id=user_id, lane_id=lane_id)
             self.session.commit()
@@ -110,6 +119,14 @@ class ResumeService:
         if lane.status is not LaneStatus.ACTIVE:
             raise ApiError(422, "lane_not_active")
         return lane
+
+    def evidence_states(
+        self, *, user_id: uuid.UUID, resume_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, EvidenceExtractionState]:
+        return extraction_states(self.session, user_id=user_id, resume_ids=resume_ids)
+
+    def request_evidence_extraction(self, *, user_id: uuid.UUID, resume_id: uuid.UUID) -> None:
+        request_extraction(self.session, user_id=user_id, resume_id=resume_id)
 
     def list(self, *, user_id: uuid.UUID) -> Sequence[tuple[Resume, Artifact]]:
         return self.resumes.list_with_artifacts(user_id=user_id)

@@ -17,6 +17,7 @@ from app.config import AuthSettings, Environment, Settings, get_auth_settings
 from app.core.db import database_url, session_factory
 from app.db.bootstrap import APP_ROLE, bootstrap
 from app.main import create_app
+from app.review_registry import build_review_registry
 from tests.auth.fake_idp import FAKE_CLIENT_ID, FakeIdentityProvider
 from tests.db.review_helpers import recording_registry
 
@@ -127,6 +128,23 @@ def app(
         session_factory=app_sessions,
         identity_provider=idp,
         review_registry=recording_registry(),
+    )
+    application.dependency_overrides[get_auth_settings] = lambda: auth_settings
+    return application
+
+
+@pytest.fixture
+def production_app(
+    db_settings: Settings,
+    app_sessions: sessionmaker[Session],
+    idp: FakeIdentityProvider,
+    auth_settings: AuthSettings,
+) -> FastAPI:
+    application = create_app(
+        db_settings,
+        session_factory=app_sessions,
+        identity_provider=idp,
+        review_registry=build_review_registry(),
     )
     application.dependency_overrides[get_auth_settings] = lambda: auth_settings
     return application
