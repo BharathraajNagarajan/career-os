@@ -110,6 +110,11 @@ class LinkSkillRequest(StrictModel):
     skill_id: uuid.UUID
 
 
+class EvidenceExtractionState(BaseModel):
+    status: Literal["not_requested", "pending", "succeeded", "failed"]
+    error_code: str | None
+
+
 class BadgeResponse(BaseModel):
     evidence_class: EvidenceClass
     engagement_type: EngagementType | None

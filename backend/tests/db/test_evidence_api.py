@@ -297,7 +297,7 @@ def test_classification_change_needs_explicit_confirmation_and_records_old_and_n
     assert changed["state_version"] == claim["state_version"] + 1
     events = events_of(owner_session, "claim", claim["id"])
     assert events == ["CLAIM_CONFIRMED", "EVIDENCE_CLASS_CHANGED"]
-    payload = owner_session.execute(
+    payload: dict[str, Any] = owner_session.execute(
         text("SELECT payload FROM domain_events WHERE event_type = 'EVIDENCE_CLASS_CHANGED'")
     ).scalar_one()
     assert payload == {

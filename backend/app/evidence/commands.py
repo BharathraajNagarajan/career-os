@@ -649,24 +649,43 @@ def change_classification(
         },
     )
     SkillRepository(session).touch(user_id=user_id, skill_ids=[skill.id for skill in skills])
+    record_class_change(
+        session,
+        user_id=user_id,
+        claim_id=claim.id,
+        old=(old_class, old_engagement),
+        new=(evidence_class, engagement),
+        review_item_id=review_item_id,
+    )
+    session.refresh(claim)
+    return claim
+
+
+def record_class_change(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    claim_id: uuid.UUID,
+    old: tuple[EvidenceClass, EngagementType | None],
+    new: tuple[EvidenceClass, EngagementType | None],
+    review_item_id: uuid.UUID | None,
+) -> None:
     _emit(
         session,
         user_id=user_id,
         aggregate_type=AggregateType.CLAIM,
-        aggregate_id=claim.id,
+        aggregate_id=claim_id,
         event_type=EVIDENCE_CLASS_CHANGED,
         payload=EvidenceClassChanged(
-            claim_id=claim.id,
-            old_evidence_class=old_class.value,
-            new_evidence_class=evidence_class.value,
-            old_engagement_type=None if old_engagement is None else old_engagement.value,
-            new_engagement_type=None if engagement is None else engagement.value,
+            claim_id=claim_id,
+            old_evidence_class=old[0].value,
+            new_evidence_class=new[0].value,
+            old_engagement_type=None if old[1] is None else old[1].value,
+            new_engagement_type=None if new[1] is None else new[1].value,
             review_item_id=review_item_id,
         ),
         source_ref_id=review_item_id,
     )
-    session.refresh(claim)
-    return claim
 
 
 def reject_claim(

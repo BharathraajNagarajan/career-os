@@ -9,7 +9,7 @@ from app.config import Settings
 from app.core.logging import get_logger
 from app.jobs import queue
 from app.jobs.queue import ClaimedJob
-from app.jobs.registry import JobContext, JobRegistry
+from app.jobs.registry import JobContext, JobRegistry, PermanentJobError
 
 log = get_logger(__name__)
 
@@ -65,6 +65,8 @@ class JobRunner:
                     log.warning("job_lease_lost", **fields)
                     return JobOutcome.LEASE_LOST
                 session.commit()
+        except PermanentJobError as exc:
+            return self._fail(job, exc.code, fields)
         except Exception as exc:
             return self._retry_or_fail(job, type(exc).__name__, fields)
         log.info(

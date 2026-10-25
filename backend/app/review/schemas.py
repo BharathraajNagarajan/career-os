@@ -59,3 +59,23 @@ class EditConfirmRequest(ConfirmRequest):
 
 class RejectRequest(ConfirmRequest):
     note: str | None = Field(default=None, max_length=1000)
+
+
+class BatchConfirmItem(StrictModel):
+    id: uuid.UUID
+    expected_state_version: int = Field(ge=1)
+
+
+class BatchConfirmRequest(StrictModel):
+    items: list[BatchConfirmItem] = Field(min_length=1, max_length=100)
+
+
+class BatchConfirmResult(BaseModel):
+    id: uuid.UUID
+    ok: bool
+    error_code: str | None
+    item: ReviewItemResponse | None
+
+
+class BatchConfirmResponse(BaseModel):
+    results: list[BatchConfirmResult]

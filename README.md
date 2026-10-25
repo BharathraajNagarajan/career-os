@@ -109,6 +109,9 @@ Settings come only from environment variables; the application never reads a `.e
 | `JD_MIN_CHARS` | `200` | Shortest accepted pasted job description (after trimming); shorter gets 422 `jd_too_short` |
 | `JD_MAX_CHARS` | `50000` | Longest accepted pasted job description (at most 200000); longer gets 422 `jd_too_long` |
 | `JD_EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output ceiling for the one extraction call per pasted job description |
+| `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS` | `8000` | Output ceiling for the one evidence-extraction call per resume |
+| `EVIDENCE_MAX_CLAIMS` | `60` | Most claim proposals kept from one extraction (1 to 100); the rest are dropped and counted |
+| `EVIDENCE_MAX_SKILLS` | `80` | Most skill proposals kept from one extraction (1 to 100) |
 
 ## Opportunities and job descriptions
 

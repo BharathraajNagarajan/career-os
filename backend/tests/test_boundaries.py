@@ -127,3 +127,28 @@ def test_no_model_ids_or_prices_are_hard_coded_in_application_code() -> None:
     ]
 
     assert offenders == []
+
+
+def test_resume_extraction_can_only_create_review_items() -> None:
+    forbidden_models = {"Claim", "Skill", "EvidenceSource", "ClaimSkill"}
+    forbidden_commands = {
+        "create_claim",
+        "add_skill",
+        "ensure_skill",
+        "change_classification",
+        "edit_claim",
+        "link_skill",
+        "add_source",
+    }
+    path = APP / "evidence" / "extraction.py"
+
+    imports = imported(path)
+
+    assert not [
+        name
+        for module, names in imports
+        for name in names
+        if (module == "app.db.models" and name in forbidden_models)
+        or (module == "app.evidence.commands" and name in forbidden_commands)
+    ]
+    assert not [module for module, _ in imports if module == "app.evidence.service"]

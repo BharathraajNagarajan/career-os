@@ -7,6 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 
+class PermanentJobError(Exception):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class JobContext:
     session: Session

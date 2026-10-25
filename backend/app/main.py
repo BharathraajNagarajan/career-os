@@ -29,6 +29,7 @@ from app.profile.router import router as profile_router
 from app.resumes.router import router as resumes_router
 from app.review.handlers import ReviewHandlerRegistry
 from app.review.router import router as review_router
+from app.review_registry import build_review_registry
 from app.strategy.router import router as strategy_router
 
 
@@ -73,7 +74,7 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.identity_provider = identity_provider
     app.state.settings = settings
-    app.state.review_registry = review_registry or ReviewHandlerRegistry()
+    app.state.review_registry = review_registry or build_review_registry()
     app.state.storage = storage or FilesystemStorage(settings.artifact_storage_dir)
     install_error_handlers(app)
     app.include_router(health_router)

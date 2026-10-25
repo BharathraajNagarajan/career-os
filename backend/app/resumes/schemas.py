@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.artifacts.outline import ParsedOutline
 from app.db.models import Artifact, ExtractionStatus, LaneStatus, Resume, ResumeLane, ResumeStatus
+from app.evidence.schemas import EvidenceExtractionState
 
+NOT_REQUESTED = EvidenceExtractionState(status="not_requested", error_code=None)
 Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 LaneName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 RoleLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
@@ -27,11 +29,17 @@ class ResumeSummary(BaseModel):
     byte_size: int
     extraction_status: ExtractionStatus
     extraction_error_code: str | None
+    evidence_extraction: EvidenceExtractionState
     created_at: datetime
     archived_at: datetime | None
 
     @classmethod
-    def build(cls, resume: Resume, artifact: Artifact) -> "ResumeSummary":
+    def build(
+        cls,
+        resume: Resume,
+        artifact: Artifact,
+        evidence: EvidenceExtractionState = NOT_REQUESTED,
+    ) -> "ResumeSummary":
         return cls(
             id=resume.id,
             label=resume.label,
@@ -43,6 +51,7 @@ class ResumeSummary(BaseModel):
             byte_size=artifact.byte_size,
             extraction_status=artifact.extraction_status,
             extraction_error_code=artifact.extraction_error_code,
+            evidence_extraction=evidence,
             created_at=resume.created_at,
             archived_at=resume.archived_at,
         )
@@ -52,10 +61,15 @@ class ResumeDetail(ResumeSummary):
     parsed_outline: ParsedOutline | None
 
     @classmethod
-    def build_detail(cls, resume: Resume, artifact: Artifact) -> "ResumeDetail":
+    def build_detail(
+        cls,
+        resume: Resume,
+        artifact: Artifact,
+        evidence: EvidenceExtractionState = NOT_REQUESTED,
+    ) -> "ResumeDetail":
         outline = None if resume.parsed_outline is None else resume.parsed_outline
         return cls(
-            **ResumeSummary.build(resume, artifact).model_dump(),
+            **ResumeSummary.build(resume, artifact, evidence).model_dump(),
             parsed_outline=None if outline is None else ParsedOutline.model_validate(outline),
         )
 
