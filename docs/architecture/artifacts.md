@@ -73,4 +73,4 @@ Lines are the non-empty, trimmed lines of the extracted text, numbered from 1. A
 
 - S3-compatible adapter (O-6, at deployment).
 - OCR for scanned PDFs; such files currently fail as `unreadable`.
-- Extraction of claims or skills from resume text (Task 9).
+- Extraction of claims or skills from resume text happens only on the user's request and creates review items, never rows: see [evidence-skills.md](evidence-skills.md) (Task 9).

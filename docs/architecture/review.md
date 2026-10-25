@@ -24,6 +24,8 @@ pending ──confirm / edit + confirm──▶ confirmed
 
 Reads: `GET /api/v1/review-items?status=pending` (the caller's items, newest first) and `GET …/{id}`. Every item carries `confirmable`, true when a handler is registered for its type. Foreign ids return 404.
 
+**Batch confirm** (`POST /api/v1/review-items/batch-confirm`, up to 100 entries of `{id, expected_state_version}`) runs the normal confirm for each entry in its own transaction and returns one result per entry (`ok`, or an `error_code` such as `conflict`, `not_found`, `invalid_transition`, `invalid_payload` or a handler's refusal). Every entry still goes through the claim-before-handler version check below, and a failure never rolls back another entry's success. A foreign id reports `not_found`.
+
 Each command is one transaction, in this order:
 
 1. Load the item through the user-scoped repository (`NotFound` for another user's id).
@@ -56,7 +58,8 @@ registry.register(ReviewHandler(ProposalType.SKILL, SkillProposal, confirm_skill
 - `confirm` receives a `ReviewContext` (session, user id, review item id, optional `llm_run_id`) and calls the same service method the manual UI action calls. It must not commit; the framework commits.
 - The payload model is the single schema for the proposal, the edit form and the command input.
 - Producers create items with `ReviewItemRepository.create(...)`, which validates the payload against the registered model, or, when no handler is registered, requires an integer `schema_version`. They pass `llm_run_id` from the gateway's `StructuredResult.run_id` for provenance.
-- Handlers are registered on the application's `ReviewHandlerRegistry` (`create_app(review_registry=...)`). Production registers none yet, so every item is rejectable but not confirmable until its producer ships; tests use a recording registry with a synthetic type.
+- Handlers are registered on a `ReviewHandlerRegistry`. `app/review_registry.py` builds the production registry used by the API (`create_app`) and by the worker that creates the items. Task 9 registers the first two production handlers, `claim` and `skill` ([evidence-skills.md](evidence-skills.md)); the other proposal types stay rejectable but not confirmable until their producers ship. Tests pass `create_app(review_registry=...)` a recording registry with a synthetic type, or the production one for the evidence tests.
+- A handler may raise `ApiError` for a domain refusal (for example `gap_marked` or `target_missing`). The error propagates after the framework has rolled the transaction back, so the item stays pending with its version unchanged.
 
 `evidence_ref_id` is a plain uuid (the tables it will point at do not exist yet) and must be re-resolved through a user-scoped repository before use (INV-18). Proposal payloads are plain data; the UI renders them as text, never HTML (T5).
 
