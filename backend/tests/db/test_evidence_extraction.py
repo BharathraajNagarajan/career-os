@@ -794,6 +794,12 @@ def test_rejecting_a_proposal_creates_nothing(
     assert response.status_code == 200
     assert evidence_row_counts(owner_session)["claims"] == 0
     assert row_count(owner_session, "domain_events WHERE aggregate_type = 'claim'") == 0
+    rejected_item = persona.request("GET", f"/api/v1/review-items/{item['id']}").json()
+    assert rejected_item["status"] == "rejected"
+    assert rejected_item["decision_note"] == "not mine"
+    assert rejected_item["decided_at"] is not None
+    assert rejected_item["proposed_payload"] == item["proposed_payload"]
+    assert rejected_item["decided_payload"] is None
 
 
 def test_batch_confirm_reports_each_item_and_keeps_the_successful_ones(
@@ -894,3 +900,80 @@ def test_the_default_fake_provider_proposes_grounded_placeholders(
         "gadgets",
         "testing",
     ]
+
+
+def test_confirmed_items_keep_the_proposal_and_emit_the_required_events(
+    persona: Persona,
+    owner_session: Session,
+    app_sessions: sessionmaker[Session],
+    db_settings: Settings,
+) -> None:
+    extract(persona, owner_session, app_sessions, db_settings, [output_json()])
+    item = by_statement(claim_items(persona), LINE_INTERN)
+
+    assert confirm_item(persona, item).status_code == 200
+
+    decided = persona.request("GET", f"/api/v1/review-items/{item['id']}").json()
+    assert decided["status"] == "confirmed"
+    assert decided["decided_at"] is not None
+    assert decided["proposed_payload"] == item["proposed_payload"]
+    events = owner_session.execute(
+        text("SELECT aggregate_type, event_type FROM domain_events ORDER BY recorded_at, id")
+    ).all()
+    assert sorted(tuple(event) for event in events) == [
+        ("claim", "CLAIM_CONFIRMED"),
+        ("skill", "SKILL_CONFIRMED"),
+        ("skill", "SKILL_CONFIRMED"),
+    ]
+
+
+def test_no_extraction_review_merge_reject_or_class_change_path_sets_a_gap(
+    persona: Persona,
+    owner_session: Session,
+    app_sessions: sessionmaker[Session],
+    db_settings: Settings,
+) -> None:
+    extract(persona, owner_session, app_sessions, db_settings, [output_json()])
+    pending = review_items(persona)
+    entries = [{"id": i["id"], "expected_state_version": i["state_version"]} for i in pending]
+    batch = persona.request("POST", "/api/v1/review-items/batch-confirm", json={"items": entries})
+    assert all(result["ok"] for result in body_of(batch)["results"])
+    claims = persona.request("GET", "/api/v1/claims").json()
+    first, second = claims[0], claims[1]
+    persona.request(
+        "POST",
+        f"/api/v1/claims/{first['id']}/classification",
+        json={
+            "expected_state_version": first["state_version"],
+            "evidence_class": "learning",
+            "engagement_type": None,
+            "confirm_change": True,
+        },
+    )
+    persona.request(
+        "POST",
+        f"/api/v1/claims/{second['id']}/reject",
+        json={"expected_state_version": second["state_version"]},
+    )
+    skills = persona.request("GET", SKILLS).json()
+    survivor, merged = skills[0], skills[1]
+    merge = persona.request(
+        "POST",
+        f"{SKILLS}/{survivor['id']}/merge",
+        json={
+            "merged_id": merged["id"],
+            "expected_state_version": survivor["state_version"],
+            "expected_merged_state_version": merged["state_version"],
+        },
+    )
+    assert merge.status_code == 200
+    persona.request(
+        "POST",
+        f"/api/v1/review-items/{pending[0]['id']}/reject",
+        json={"expected_state_version": 99},
+    )
+
+    flags = owner_session.execute(text("SELECT user_marked_gap, gap_note FROM skills")).all()
+    assert flags
+    assert all(tuple(flag) == (False, None) for flag in flags)
+    assert row_count(owner_session, "domain_events WHERE event_type LIKE 'SKILL_GAP%'") == 0

@@ -709,3 +709,84 @@ def test_mutations_without_a_csrf_token_are_refused(persona: Persona) -> None:
     )
 
     assert created.status_code == gap.status_code == 403
+
+
+def test_learning_evidence_added_to_a_gap_marked_skill_does_not_clear_the_gap(
+    persona: Persona, owner_session: Session
+) -> None:
+    skill = create_skill(persona, "Gadgets")
+    marked = body_of(mark_gap(persona, skill, "Never used"))
+
+    create_claim(persona, skill["id"], evidence_class="learning")
+
+    detail = get_skill(persona, skill["id"])
+    assert detail["user_marked_gap"] is True
+    assert detail["gap_note"] == "Never used"
+    assert detail["categories"] == ["learning", "gap"]
+    assert events_of(owner_session, "skill", skill["id"]) == ["SKILL_ADDED", "SKILL_GAP_MARKED"]
+    cleared = body_of(
+        persona.request(
+            "POST",
+            f"{SKILLS}/{skill['id']}/clear-gap",
+            json={"expected_state_version": marked["state_version"]},
+        )
+    )
+    assert cleared["user_marked_gap"] is False
+    assert events_of(owner_session, "skill", skill["id"])[-1] == "SKILL_GAP_CLEARED"
+
+
+def test_a_rejected_claim_keeps_its_row_sources_links_and_events(
+    persona: Persona, owner_session: Session
+) -> None:
+    skill = create_skill(persona, "Widgets")
+    claim = create_claim(
+        persona, skill["id"], evidence_class="project", start_date="2021-01-01", end_date=None
+    )
+    assert get_skill(persona, skill["id"])["is_current"] is True
+
+    rejected = body_of(
+        persona.request(
+            "POST",
+            f"{CLAIMS}/{claim['id']}/reject",
+            json={"expected_state_version": claim["state_version"]},
+        )
+    )
+
+    assert rejected["confirmation_status"] == "rejected"
+    assert [source["assertion_text"] for source in rejected["sources"]] == [
+        claim["sources"][0]["assertion_text"]
+    ]
+    assert [ref["id"] for ref in rejected["skills"]] == [skill["id"]]
+    assert (
+        persona.request("GET", CLAIMS, params={"status": "rejected"}).json()[0]["id"] == claim["id"]
+    )
+    assert events_of(owner_session, "claim", claim["id"]) == ["CLAIM_CONFIRMED", "CLAIM_REJECTED"]
+    owner_session.rollback()
+    kept = owner_session.execute(
+        text(
+            "SELECT (SELECT count(*) FROM claims), (SELECT count(*) FROM evidence_sources), "
+            "(SELECT count(*) FROM claim_skills)"
+        )
+    ).one()
+    assert tuple(kept) == (1, 1, 1)
+    detail = get_skill(persona, skill["id"])
+    assert detail["badges"] == []
+    assert detail["is_current"] is False
+    assert detail["latest_end_date"] is None
+    assert mark_gap(persona, detail).status_code == 200
+
+
+def test_resume_exposure_never_includes_another_users_resumes(
+    persona: Persona, other: Persona, owner_session: Session
+) -> None:
+    mine = create_skill(persona, "Widgets")
+    theirs = create_skill(other, "Widgets")
+    upload_resume(persona, owner_session, tag="mine", text_body="Nothing relevant here")
+    upload_resume(other, owner_session, tag="theirs", text_body="Years of widgets experience")
+
+    assert get_skill(persona, mine["id"])["exposure"] == []
+    assert [item["label"] for item in get_skill(other, theirs["id"])["exposure"]] == [
+        "Resume theirs"
+    ]
+    (listed,) = persona.request("GET", SKILLS).json()
+    assert listed["exposure"] == []

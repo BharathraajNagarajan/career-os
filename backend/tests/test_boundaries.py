@@ -152,3 +152,19 @@ def test_resume_extraction_can_only_create_review_items() -> None:
         or (module == "app.evidence.commands" and name in forbidden_commands)
     ]
     assert not [module for module, _ in imports if module == "app.evidence.service"]
+
+
+def test_only_the_explicit_mark_gap_command_can_set_the_gap_marker() -> None:
+    pattern = re.compile(r"user_marked_gap[\"']?\s*[:=]\s*True")
+    files = [path for path in python_files(APP) if pattern.search(path.read_text(encoding="utf-8"))]
+    commands = APP / "evidence" / "commands.py"
+    source = commands.read_text(encoding="utf-8")
+    functions = [
+        node.name
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef)
+        and pattern.search(ast.get_source_segment(source, node) or "")
+    ]
+
+    assert files == [commands]
+    assert functions == ["mark_gap"]
