@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.config import Settings
 from app.db.models import LlmPurpose, LlmTier
 from app.evidence.extraction import parse_date
+from app.llm.factory import build_provider
 from app.llm.prompts.evidence_extract import EVIDENCE_EXTRACT, EvidenceExtraction
 from app.llm.providers.base import ProviderRequest, ProviderResult
 from app.llm.providers.fake import FakeProvider
@@ -49,7 +50,7 @@ from tests.db.extraction_helpers import (
     skill_items,
 )
 from tests.db.llm_helpers import make_gateway
-from tests.synthetic import synthetic_pdf
+from tests.synthetic import synthetic_pdf, synthetic_resume_lines
 
 pytestmark = pytest.mark.db
 
@@ -862,3 +863,34 @@ def test_parse_date_accepts_year_month_and_day_and_refuses_the_rest() -> None:
     assert parse_date("2021-06-15", today=today) == date(2021, 6, 15)
     for raw in (None, "", "June 2021", "2021-13", "1800-01-01", "2090-01-01", "21", "2021-6"):
         assert parse_date(raw, today=today) is None
+
+
+def test_the_default_fake_provider_proposes_grounded_placeholders(
+    persona: Persona,
+    owner_session: Session,
+    app_sessions: sessionmaker[Session],
+    db_settings: Settings,
+) -> None:
+    resume_text = "\n".join(synthetic_resume_lines("default"))
+    resume = upload_resume(persona, owner_session, text_body=resume_text)
+    request_extraction(persona, resume["id"])
+    provider = build_provider(db_settings)
+    assert isinstance(provider, FakeProvider)
+    gateway, _ = make_gateway(app_sessions, provider=provider)
+
+    run_evidence_jobs(app_sessions, db_settings, gateway)
+
+    claims = claim_items(persona)
+    statements = [item["proposed_payload"]["statement"] for item in claims]
+    assert statements
+    assert all(statement in resume_text for statement in statements)
+    classes = {item["proposed_payload"]["evidence_class"] for item in claims}
+    assert classes <= {"professional", "project"}
+    assert all(
+        item["proposed_payload"]["engagement_type"] in {None, "unspecified"} for item in claims
+    )
+    assert sorted(item["proposed_payload"]["name"] for item in skill_items(persona)) == [
+        "Widgets",
+        "gadgets",
+        "testing",
+    ]
