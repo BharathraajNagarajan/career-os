@@ -318,7 +318,11 @@ export function SkillDetail() {
           <ClaimForm skillIds={[data.id]} heading="Add evidence for this skill" />
 
           <h2>Resumes</h2>
-          {data.exposure.length === 0 && <p>Not found on any resume.</p>}
+          <p>
+            This shows where the skill's name appears in resume text, or where your evidence cites a
+            resume. It is text presence, not proof of proficiency.
+          </p>
+          {data.exposure.length === 0 && <p>Name not found in the text of any resume.</p>}
           <ul>
             {data.exposure.map((resume) => (
               <li key={resume.resume_id}>
@@ -326,8 +330,8 @@ export function SkillDetail() {
                 {resume.archived && " (archived)"}
                 {" · "}
                 {[
-                  resume.stated ? "stated in evidence from this resume" : null,
-                  resume.mentioned ? "mentioned in its text" : null,
+                  resume.stated ? "cited by your evidence" : null,
+                  resume.mentioned ? "name appears in its text" : null,
                 ]
                   .filter((part) => part !== null)
                   .join(", ")}

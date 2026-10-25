@@ -79,7 +79,8 @@ describe("SkillDetail", () => {
     );
     expect(screen.getByText("From resume: Resume A")).toBeInTheDocument();
     expect(screen.getByText(/Example Corp/)).toBeInTheDocument();
-    expect(screen.getByText(/Resume A · stated in evidence from this resume/)).toBeInTheDocument();
+    expect(screen.getByText(/text presence, not proof of proficiency/)).toBeInTheDocument();
+    expect(screen.getByText(/Resume A · cited by your evidence/)).toBeInTheDocument();
   });
 
   it("marks a gap and shows the server's refusal when confirmed evidence exists", async () => {

@@ -96,8 +96,8 @@ function SkillRow({ skill }: { skill: SkillSummary }) {
       <br />
       <span>
         {skill.exposure.length === 0
-          ? "Not found on any resume"
-          : `On ${String(skill.exposure.length)} resume${skill.exposure.length === 1 ? "" : "s"}`}
+          ? "Name not found in the text of any resume"
+          : `Name appears in the text of ${String(skill.exposure.length)} resume${skill.exposure.length === 1 ? "" : "s"} (not proof of proficiency)`}
       </span>
     </li>
   );

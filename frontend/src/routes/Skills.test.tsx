@@ -65,7 +65,7 @@ describe("Skills", () => {
       "Professional (Full-time)",
       "Project",
     ]);
-    expect(python).toHaveTextContent("On 1 resume");
+    expect(python).toHaveTextContent("Name appears in the text of 1 resume (not proof of proficiency)");
   });
 
   it("labels an internship distinctly from full-time employment", async () => {
@@ -88,7 +88,7 @@ describe("Skills", () => {
     expect(widgets).not.toHaveTextContent(/gap/i);
     const rust = screen.getByRole("link", { name: "Rust" }).closest("li") as HTMLElement;
     expect(rust).toHaveTextContent("Gap (marked by you)");
-    expect(widgets).toHaveTextContent("Not found on any resume");
+    expect(widgets).toHaveTextContent("Name not found in the text of any resume");
   });
 
   it("filters by search, category and engagement type through the server", async () => {
