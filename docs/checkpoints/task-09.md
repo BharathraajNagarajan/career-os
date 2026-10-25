@@ -29,6 +29,8 @@ Also: settings `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS`, `EVIDENCE_MAX_CLAIMS`, `
 - **Isolation:** 18 new routes each have a case (foreign ids 404, lists never leak, acting as B changes nothing of A's).
 - **Stack run (fake provider, clean shell).** `migrate` ran 0007 to 0008 and exited 0; `/healthz` 200. A synthetic user and session were created as owner. Upload and parse succeeded; `extract-evidence` returned 202 `pending`; a second request gave 409 `extraction_pending`. `llm_runs`: `extract_resume`, `evidence.extract` v1, `fake`/`fake-fast`, tier `fast`, `succeeded`, 582 in, 375 out, cost 0.002457. Seven pending review items (4 claims, 3 skills). **Before confirming: 0 skills, 0 claims, 0 sources, 0 links.** Batch confirm of six items: six `ok`, plus a made-up id reported `not_found`. Edit-confirm of a project claim to Learning: 422 `confirmation_required` without the flag, 200 with it, and `EVIDENCE_CLASS_CHANGED` (project to learning) written with the review item id. Skills showed derived headlines. A new skill showed Not recorded; marking a gap on it worked; marking a gap on a skill with a confirmed professional claim returned 409 `gap_refused_evidence_exists`. Merging two skills made the merged one a redirect and gave the survivor its alias. After account deletion every count (events, claims, skills, sources, links, review items, runs, resumes, artifacts, sessions, jobs) was 0. A second run with a hostile resume (HTML in the text) produced the proposals as plain strings.
 
+**Live UI check (check 5), done by the owner with the fake provider: passed.** Confirmed: upload without extraction; explicit extraction; no skills or claims before confirm; Edit and confirm with the Project to Learning dialog; batch confirm; derived badges (Widgets showed Professional (Internship) and Learning together after a Learning claim was linked); Not recorded shown as Not recorded, not Gap; gap marked on testing; gap refused on Widgets; engagement type changed to Internship through the confirmation dialog; gadgets merged into Widgets (gone from the list, shown as an other name after a refresh); a claim edited and then rejected; a hostile resume with `<script>`, `<img onerror>` and `<b>` tags shown as plain text in Review and Skills with nothing executed.
+
 ## Changes outside the expected file set
 
 | File | Change | Reason |
@@ -65,7 +67,7 @@ Also: settings `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS`, `EVIDENCE_MAX_CLAIMS`, `
 | Frontend `npm run lint`, `typecheck`, `test`, `build` | Pass: 188 tests (145 before) |
 | Regenerated `openapi.json` and `schema.d.ts` | Up to date (regeneration produces no diff) |
 | Stack: `migrate` exit 0, `/healthz` 200, end-to-end script, deletion leaves no rows | Pass (twice, including the hostile resume) |
-| Live UI check (owner) | Not run yet: pending the owner |
+| Live UI check (owner), 13 steps on `http://localhost:5173` with the fake provider | Pass (see Evidence) |
 | Optional real extraction with an Anthropic key | Not run (declined by the owner for now) |
 | GitHub Actions (backend, frontend, secrets) | Pass on `5682457` (run 40186520411) |
 
@@ -120,7 +122,10 @@ If the control chat wants the API body to carry the sentence as well, that is a 
 ## Unresolved issues
 
 - Port reservation: resolved. The owner restarted winnat; the stack now runs on the normal ports (`migrate` exit 0, `/healthz` 200, `http://localhost:5173` serves the app and proxies the API).
-- Check 5 (the owner's UI check) is not run yet.
+- Cosmetic issues found in the UI check, deferred to Task 10 (design):
+  - Skill proposals in Review show the raw JSON payload (name, resume_id, schema_version) instead of a readable summary.
+  - On the Skills list each badge appears twice (the summary line and the bullet list).
+  - After a merge the page needs a refresh before Other names shows the merged name.
 - Check 6 (real extraction) was declined by the owner for now and is **not run**.
 - GitHub Actions is untested until the push.
 - The fake provider's sample proposes at most five claims per resume and never an engagement type; only scripted tests and a real run exercise those paths.
