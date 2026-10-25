@@ -6,7 +6,8 @@ export function Layout() {
       <header className="shell-header">
         <span className="wordmark">Career OS</span>{" "}
         <nav aria-label="Main" className="shell-nav">
-          <Link to="/profile">Profile</Link> <Link to="/resumes">Resumes</Link>{" "}
+          <Link to="/profile">Profile</Link> <Link to="/resumes">Resumes</Link> <Link to="/skills">Skills</Link>{" "}
+          <Link to="/claims">Evidence</Link>{" "}
           <Link to="/lanes">Lanes</Link> <Link to="/opportunities">Opportunities</Link>{" "}
           <Link to="/applications">Applications</Link> <Link to="/companies">Companies</Link>{" "}
           <Link to="/contacts">Contacts</Link> <Link to="/actions">Actions</Link>{" "}

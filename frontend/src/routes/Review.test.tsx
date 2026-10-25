@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import type { ReviewItem } from "../api/review";
 import { jsonResponse, mockApi, renderPage } from "../test-utils";
@@ -218,5 +218,233 @@ describe("Review", () => {
     expect(screen.getByRole("button", { name: "Edit and confirm" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled();
     expect(screen.getByText(/cannot be confirmed yet/)).toBeInTheDocument();
+  });
+});
+
+function claimItem(id: string, statement: string, overrides: Partial<ReviewItem> = {}): ReviewItem {
+  return item({
+    id,
+    proposal_type: "claim",
+    evidence_ref_id: "resume-1",
+    proposed_payload: {
+      schema_version: 1,
+      statement,
+      evidence_class: "professional",
+      engagement_type: "unspecified",
+      start_date: "2021-06-01",
+      end_date: null,
+      organization_label: "Example Corp",
+      skill_names: ["Python", "SQL"],
+      resume_id: "resume-1",
+      confirm_class_change: false,
+    },
+    ...overrides,
+  });
+}
+
+function skillItem(id: string, name: string): ReviewItem {
+  return item({
+    id,
+    proposal_type: "skill",
+    evidence_ref_id: "resume-1",
+    proposed_payload: { schema_version: 1, name, resume_id: "resume-1" },
+  });
+}
+
+function serveWithResume(
+  initial: ReviewItem[],
+  decision?: (call: RecordedCall) => Response | undefined,
+) {
+  const server: Server = { calls: [], pending: initial };
+  server.calls = mockApi((call) => {
+    if (call.method === "GET" && call.url === "/api/v1/review-items?status=pending") {
+      return jsonResponse(server.pending);
+    }
+    if (call.method === "GET" && call.url === "/api/v1/resumes") {
+      return jsonResponse([{ id: "resume-1", label: "Sample resume" }]);
+    }
+    if (call.method === "POST") {
+      return decision?.(call);
+    }
+    return undefined;
+  });
+  return server;
+}
+
+describe("Review of extracted evidence", () => {
+  it("groups proposals by source resume and shows claims as readable evidence", async () => {
+    serveWithResume([
+      claimItem("c1", "Built sample widgets"),
+      skillItem("s1", "Python"),
+      item({ id: "other", proposal_type: "interaction", evidence_ref_id: null }),
+    ]);
+
+    renderPage(<Review />);
+
+    const group = await screen.findByRole("region", { name: "From resume: Sample resume" });
+    expect(within(group).getByText("Built sample widgets")).toBeInTheDocument();
+    expect(
+      within(group).getByText("Professional (Type not specified) · Example Corp · 2021-06-01 to present"),
+    ).toBeInTheDocument();
+    expect(within(group).getByText("Skills: Python, SQL")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Other proposals" })).toBeInTheDocument();
+  });
+
+  it("confirms several selected items at once and reports a partial failure per item", async () => {
+    const server = serveWithResume(
+      [claimItem("c1", "First claim"), claimItem("c2", "Second claim"), skillItem("s1", "Python")],
+      (call) => {
+        if (call.url !== "/api/v1/review-items/batch-confirm") {
+          return undefined;
+        }
+        server.pending = [claimItem("c2", "Second claim")];
+        return jsonResponse({
+          results: [
+            { id: "c1", ok: true, error_code: null, item: item({ id: "c1", status: "confirmed" }) },
+            { id: "c2", ok: false, error_code: "gap_marked", item: null },
+            { id: "s1", ok: true, error_code: null, item: item({ id: "s1", status: "confirmed" }) },
+          ],
+        });
+      },
+    );
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select First claim" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Second claim" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Python" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm selected (3)" }));
+
+    expect(await screen.findByText("Confirmed 2 of 3 selected.")).toBeInTheDocument();
+    const failures = screen.getByRole("alert");
+    expect(failures).toHaveTextContent("Second claim");
+    expect(failures).toHaveTextContent("marked as a gap");
+    expect(failures).not.toHaveTextContent("First claim");
+    const [post] = server.calls.filter((call) => call.method === "POST");
+    expect(JSON.parse(post?.body as string)).toEqual({
+      items: [
+        { id: "c1", expected_state_version: 3 },
+        { id: "c2", expected_state_version: 3 },
+        { id: "s1", expected_state_version: 3 },
+      ],
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("First claim")).toBeNull();
+    });
+    expect(screen.getByRole("checkbox", { name: "Select Second claim" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Confirm selected (1)" })).toBeEnabled();
+  });
+
+  it("selects every confirmable item of a resume with one click", async () => {
+    serveWithResume([claimItem("c1", "First claim"), skillItem("s1", "Python")]);
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Select all in From resume: Sample resume" }));
+
+    expect(screen.getByRole("button", { name: "Confirm selected (2)" })).toBeEnabled();
+  });
+
+  it("does not confirm anything until the user selects items", async () => {
+    const server = serveWithResume([claimItem("c1", "First claim")]);
+    renderPage(<Review />);
+
+    expect(await screen.findByRole("button", { name: "Confirm selected (0)" })).toBeDisabled();
+    expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(0);
+  });
+
+  it("edits a claim without a class change and sends the full corrected payload", async () => {
+    const server = serveWithResume([claimItem("c1", "Built sample widgets")], () =>
+      jsonResponse(item({ id: "c1", status: "confirmed" })),
+    );
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit and confirm" }));
+    fireEvent.change(screen.getByLabelText("Statement"), { target: { value: " Built widgets " } });
+    fireEvent.change(screen.getByLabelText("Organization"), { target: { value: "Example Org" } });
+    fireEvent.change(screen.getByLabelText("Skills (separated by commas)"), {
+      target: { value: "Python, , Testing" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save and confirm" }));
+
+    await waitFor(() => {
+      expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(1);
+    });
+    const [post] = server.calls.filter((call) => call.method === "POST");
+    expect(post?.url).toBe("/api/v1/review-items/c1/edit-confirm");
+    expect(JSON.parse(post?.body as string)).toEqual({
+      expected_state_version: 3,
+      payload: {
+        schema_version: 1,
+        statement: "Built widgets",
+        evidence_class: "professional",
+        engagement_type: "unspecified",
+        start_date: "2021-06-01",
+        end_date: null,
+        organization_label: "Example Org",
+        skill_names: ["Python", "Testing"],
+        resume_id: "resume-1",
+        confirm_class_change: false,
+      },
+    });
+  });
+
+  it("asks the user to confirm a class change, naming old and new, before sending it", async () => {
+    const server = serveWithResume([claimItem("c1", "Built sample widgets")], () =>
+      jsonResponse(item({ id: "c1", status: "confirmed" })),
+    );
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit and confirm" }));
+    fireEvent.change(screen.getByLabelText("Engagement type"), { target: { value: "full_time" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save and confirm" }));
+
+    const dialog = screen.getByRole("alertdialog", { name: "Confirm classification change" });
+    expect(dialog).toHaveTextContent(
+      "from Professional (Type not specified) to Professional (Full-time)",
+    );
+    expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm change and save" }));
+
+    await waitFor(() => {
+      expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(1);
+    });
+    const [post] = server.calls.filter((call) => call.method === "POST");
+    const sent = JSON.parse(post?.body as string) as { payload: Record<string, unknown> };
+    expect(sent.payload.engagement_type).toBe("full_time");
+    expect(sent.payload.confirm_class_change).toBe(true);
+  });
+
+  it("keeps the proposed class when the user declines the class change", async () => {
+    const server = serveWithResume([claimItem("c1", "Built sample widgets")]);
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit and confirm" }));
+    fireEvent.change(screen.getByLabelText("Evidence class"), { target: { value: "learning" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save and confirm" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep proposed class" }));
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(server.calls.filter((call) => call.method === "POST")).toHaveLength(0);
+  });
+
+  it("renders hostile claim text as plain text", async () => {
+    const hostile = '<img src=x onerror="alert(1)"><script>alert(2)</script>';
+    serveWithResume([claimItem("c1", hostile, { rationale: hostile })]);
+
+    const { container } = renderPage(<Review />);
+
+    expect((await screen.findAllByText(hostile)).length).toBeGreaterThan(0);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+  });
+
+  it("explains the confirmation requirement reported by the server", async () => {
+    serveWithResume([claimItem("c1", "Built sample widgets")], () =>
+      jsonResponse({ error: { code: "confirmation_required" } }, 422),
+    );
+    renderPage(<Review />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Confirm the change of class");
   });
 });

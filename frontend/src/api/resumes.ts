@@ -18,10 +18,19 @@ export async function fetchResumes(signal?: AbortSignal): Promise<Resume[]> {
   return readJson(await apiFetch("/api/v1/resumes", { signal: signal ?? null }));
 }
 
-export async function uploadResume(file: File): Promise<Resume> {
+export async function uploadResume(file: File, extractEvidence = false): Promise<Resume> {
   const form = new FormData();
   form.append("file", file);
+  if (extractEvidence) {
+    form.append("extract_evidence", "true");
+  }
   return readJson(await apiFetch("/api/v1/resumes", { method: "POST", form }));
+}
+
+export async function extractEvidence(resumeId: string): Promise<Resume> {
+  return readJson(
+    await apiFetch(`/api/v1/resumes/${resumeId}/extract-evidence`, { method: "POST" }),
+  );
 }
 
 export async function renameResume(resumeId: string, label: string): Promise<Resume> {

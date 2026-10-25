@@ -30,6 +30,7 @@ function resume(overrides: Partial<Resume> = {}): Resume {
     byte_size: 1000,
     extraction_status: "succeeded",
     extraction_error_code: null,
+    evidence_extraction: { status: "not_requested", error_code: null },
     created_at: "2026-01-01T00:00:00Z",
     archived_at: null,
     ...overrides,
@@ -101,6 +102,7 @@ describe("Resumes", () => {
       expect(item.querySelector("input[type='file']")).toBeNull();
     }
     expect(within(items[0] as HTMLElement).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Extract evidence",
       "Rename",
       "Archive",
     ]);
@@ -213,5 +215,105 @@ describe("Resumes", () => {
     const resumeReads = calls.filter((call) => call.url === "/api/v1/resumes");
     expect(resumeReads.length).toBeLessThanOrEqual(MAX_POLLS + 2);
     expect(resumeReads.length).toBeGreaterThan(5);
+  });
+});
+
+describe("Resumes evidence extraction", () => {
+  it("requests extraction on the user's click and shows the pending state", async () => {
+    let state: Resume["evidence_extraction"] = { status: "not_requested", error_code: null };
+    const calls = serve(
+      () => [resume({ evidence_extraction: state })],
+      (call) => {
+        if (call.method === "POST" && call.url === "/api/v1/resumes/resume-1/extract-evidence") {
+          state = { status: "pending", error_code: null };
+          return jsonResponse(resume({ evidence_extraction: state }), 202);
+        }
+        return undefined;
+      },
+    );
+    renderPage(<Resumes />);
+
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+    fireEvent.click(await screen.findByRole("button", { name: "Extract evidence" }));
+
+    expect(await screen.findByText("Extracting evidence…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Extract evidence" })).toBeNull();
+    expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+  });
+
+  it("links to Review once evidence was extracted", async () => {
+    serve(() => [resume({ evidence_extraction: { status: "succeeded", error_code: null } })]);
+
+    renderPage(<Resumes />);
+
+    expect(await screen.findByRole("link", { name: "Review the proposals" })).toHaveAttribute(
+      "href",
+      "/review",
+    );
+    expect(screen.queryByRole("button", { name: "Extract evidence" })).toBeNull();
+  });
+
+  it("explains a failed extraction in plain language and allows a retry", async () => {
+    serve(() => [
+      resume({ evidence_extraction: { status: "failed", error_code: "llm_budget_exhausted" } }),
+    ]);
+
+    renderPage(<Resumes />);
+
+    expect(await screen.findByText(/budget is used up/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try extracting evidence again" })).toBeEnabled();
+  });
+
+  it("shows a plain message when the server refuses the request", async () => {
+    serve(
+      () => [resume()],
+      (call) =>
+        call.method === "POST"
+          ? jsonResponse({ error: { code: "extraction_exists" } }, 409)
+          : undefined,
+    );
+    renderPage(<Resumes />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Extract evidence" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("already extracted");
+  });
+
+  it("does not offer extraction for a resume that is still being read", async () => {
+    serve(() => [resume({ extraction_status: "pending" })]);
+
+    renderPage(<Resumes />);
+
+    await screen.findByText("Processing…");
+    expect(screen.queryByRole("button", { name: "Extract evidence" })).toBeNull();
+  });
+
+  it("sends the upload checkbox only when it is ticked", async () => {
+    const calls = serve(
+      () => [],
+      (call) =>
+        call.method === "POST" && call.url === "/api/v1/resumes"
+          ? jsonResponse(resume({ extraction_status: "pending" }), 202)
+          : undefined,
+    );
+    renderPage(<Resumes />);
+    await screen.findByText("No resumes yet.");
+    const file = new File(["%PDF-1.4"], "sample.pdf", { type: "application/pdf" });
+
+    fireEvent.change(screen.getByLabelText(/Resume file/), { target: { files: [file] } });
+    fireEvent.submit(screen.getByRole("form", { name: "Upload resume" }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+    });
+    fireEvent.click(screen.getByLabelText(/Also extract evidence/));
+    fireEvent.change(screen.getByLabelText(/Resume file/), { target: { files: [file] } });
+    fireEvent.submit(screen.getByRole("form", { name: "Upload resume" }));
+    await waitFor(() => {
+      expect(calls.filter((call) => call.method === "POST")).toHaveLength(2);
+    });
+
+    const [first, second] = calls.filter((call) => call.method === "POST");
+    expect((first?.body as FormData).get("extract_evidence")).toBeNull();
+    expect((second?.body as FormData).get("extract_evidence")).toBe("true");
   });
 });

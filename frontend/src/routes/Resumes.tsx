@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import type { SubmitEvent } from "react";
+import { Link } from "react-router-dom";
 
 import {
   assignResumeLane,
+  extractEvidence,
   fetchLanes,
   fetchResumes,
   renameResume,
@@ -12,6 +14,7 @@ import {
   uploadResume,
 } from "../api/resumes";
 import type { Lane, Resume } from "../api/resumes";
+import { evidenceErrorMessage, extractionFailureMessage } from "./evidenceLabels";
 import { extractionMessage, uploadErrorMessage } from "./resumeMessages";
 
 export const POLL_INTERVAL_MS = 2000;
@@ -47,6 +50,12 @@ function ResumeItem({ resume, lanes }: ResumeItemProps) {
     mutationFn: (archived: boolean) => setResumeArchived(resume.id, archived),
     onSuccess: refresh,
   });
+  const extract = useMutation({ mutationFn: () => extractEvidence(resume.id), onSuccess: refresh });
+  const evidence = resume.evidence_extraction;
+  const canExtract =
+    resume.extraction_status === "succeeded" &&
+    !resume.archived &&
+    (evidence.status === "not_requested" || evidence.status === "failed");
   const selectableLanes = lanes.filter(
     (lane) => lane.status === "active" || lane.id === resume.lane_id,
   );
@@ -89,6 +98,29 @@ function ResumeItem({ resume, lanes }: ResumeItemProps) {
       <span>({resume.original_filename})</span>
       {resume.archived && <span> Archived.</span>}
       <p>{extractionMessage(resume.extraction_status, resume.extraction_error_code)}</p>
+      <div aria-label={`Evidence from ${resume.label}`} role="group">
+        {evidence.status === "pending" && <p role="status">Extracting evidence…</p>}
+        {evidence.status === "succeeded" && (
+          <p>
+            Evidence was extracted. <Link to="/review">Review the proposals</Link>
+          </p>
+        )}
+        {evidence.status === "failed" && (
+          <p role="alert">{extractionFailureMessage(evidence.error_code)}</p>
+        )}
+        {canExtract && (
+          <button
+            type="button"
+            disabled={extract.isPending}
+            onClick={() => {
+              extract.mutate();
+            }}
+          >
+            {evidence.status === "failed" ? "Try extracting evidence again" : "Extract evidence"}
+          </button>
+        )}
+        {extract.isError && <p role="alert">{evidenceErrorMessage(extract.error)}</p>}
+      </div>
       <label>
         Lane for {resume.label}
         <select
@@ -141,7 +173,10 @@ export function Resumes() {
     queryKey: ["resumes"],
     queryFn: ({ signal }) => fetchResumes(signal),
     refetchInterval: (query) => {
-      const pending = query.state.data?.some((row) => row.extraction_status === "pending");
+      const pending = query.state.data?.some(
+        (row) =>
+          row.extraction_status === "pending" || row.evidence_extraction.status === "pending",
+      );
       if (!pending) {
         polls.current = 0;
         return false;
@@ -151,8 +186,9 @@ export function Resumes() {
     },
   });
   const lanes = useQuery({ queryKey: ["lanes"], queryFn: ({ signal }) => fetchLanes(signal) });
+  const [alsoExtract, setAlsoExtract] = useState(false);
   const upload = useMutation({
-    mutationFn: uploadResume,
+    mutationFn: (file: File) => uploadResume(file, alsoExtract),
     onSuccess: async () => {
       polls.current = 0;
       if (fileInput.current) {
@@ -181,6 +217,16 @@ export function Resumes() {
         <label>
           Resume file (PDF or DOCX)
           <input ref={fileInput} type="file" accept=".pdf,.docx" required />
+        </label>{" "}
+        <label>
+          <input
+            type="checkbox"
+            checked={alsoExtract}
+            onChange={(event) => {
+              setAlsoExtract(event.target.checked);
+            }}
+          />
+          Also extract evidence from this resume (uses the model once)
         </label>{" "}
         <button type="submit" disabled={upload.isPending}>
           Upload
