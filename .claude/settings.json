@@ -2,5 +2,15 @@
   "attribution": {
     "commit": "",
     "pr": ""
+  },
+  "permissions": {
+    "deny": [
+      "Bash(npx:*)",
+      "Bash(npx)",
+      "Bash(npx.cmd:*)",
+      "PowerShell(npx:*)",
+      "PowerShell(npx)",
+      "PowerShell(npx.cmd:*)"
+    ]
   }
 }
