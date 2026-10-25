@@ -59,36 +59,48 @@ Also: settings `EVIDENCE_EXTRACTION_MAX_OUTPUT_TOKENS`, `EVIDENCE_MAX_CLAIMS`, `
 | Check | Result |
 | --- | --- |
 | `ruff check`, `ruff format --check`, `mypy` (strict, 234 files) | Pass |
-| Full `pytest` with Postgres and `REQUIRE_DB_TESTS=1` | Pass: 1,421 tests collected (1,292 before), exit 0, one skipped (the symlink storage test that skips on this Windows host). The last two full runs passed; the last included every change except the checkpoint file |
+| Full `pytest` with Postgres and `REQUIRE_DB_TESTS=1` | Pass: 1,422 tests collected (1,292 before). The last full local run (1,421 tests, exit 0, one skip: the symlink storage test that skips on this Windows host) predates the final added test, which passed on its own; CI runs the full set on the pushed head |
 | Extraction and rule tests (scripted `FakeProvider`) | Pass (see Evidence) |
 | Migrations on an empty DB: upgrade head, `alembic check`, downgrade base, upgrade head | Pass; no drift; run again after the last migration edit |
 | Frontend `npm run lint`, `typecheck`, `test`, `build` | Pass: 188 tests (145 before) |
 | Regenerated `openapi.json` and `schema.d.ts` | Up to date (regeneration produces no diff) |
 | Stack: `migrate` exit 0, `/healthz` 200, end-to-end script, deletion leaves no rows | Pass (twice, including the hostile resume) |
-| Live UI check (owner) | Not run yet: pending your steps and the port fix |
-| Optional real extraction with an Anthropic key | Not run (needs your key and approval) |
+| Live UI check (owner) | Not run yet: pending the owner |
+| Optional real extraction with an Anthropic key | Not run (declined by the owner for now) |
 | GitHub Actions (backend, frontend, secrets) | Pending the push |
 
 ## Deviations from the frozen spec
 
-None that contradict a rule. These are readings of places where the spec is silent or its table does not cover a case; ADR-023 records the first four.
+None contradicts a rule. Each item below is a reading of a place where the spec is silent or its table does not cover a case, listed for the control chat to accept or reject (the first four are recorded in [ADR-023](../adr/023-extraction-proposals-are-review-items-and-gap-excludes-evidence.md)). Decision after review: items 1 to 4 are kept as they are.
 
-- Extraction creates review items only, so no row has `confirmation_status = proposed`, and `SKILL_PROPOSED` and `SKILL_REJECTED` are not emitted (there is no skill to attach them to). The commands to confirm or reject a proposed row are not built because no producer creates one.
-- A confirmed claim can be rejected (`CLAIM_REJECTED`), although 5.4a lists rejection only from proposed; 4.3.2 requires the user to be able to "reject" evidence before marking a gap.
-- Evidence of a blocking class cannot be added or reclassified onto a gap-marked skill (`gap_marked`).
-- A manually added claim writes `CLAIM_CONFIRMED` (the table has no event for a manual add); skill edits write no event (the table lists none).
-- `skills.llm_run_id` is an addition from the general provenance convention in 4.1, not from the Skill row.
-- Professional evidence with an unspecified engagement type ranks between internship and academic evidence in the headline; the spec's order omits it.
-- The alias limit is 50 per skill (a database check), a number the spec does not give.
+| # | Spec section | What I did | Why |
+| --- | --- | --- | --- |
+| 1 | 5.4a (Skill and Claim tables, `SKILL_PROPOSED`, `SKILL_REJECTED`, Proposed state) | Extraction creates review items only. No row has `confirmation_status = proposed`; `SKILL_PROPOSED` and `SKILL_REJECTED` are never emitted; the commands to confirm or reject a proposed row are not built. The `proposed` and `rejected` values stay in the schema. | INV-07 and INV-14 plus the brief's "no row until a ReviewItem is confirmed". 5.4a's last paragraph itself says a confirmed review item creates the skill and claim. With no proposed row there is no skill to attach `SKILL_PROPOSED` to. Rejecting a review item is recorded on the item. |
+| 2 | 5.4a (Claim: Proposed to Rejected only) and 4.3.2 ("the user must reject or downgrade that evidence first") | A confirmed claim can be rejected (`CLAIM_REJECTED`, `from_status: confirmed`). | Without it the user could not clear confirmed evidence to satisfy the gap refusal rule, which says to reject it. |
+| 3 | 4.3.2 (Gap) and INV-13 | A skill marked as a gap refuses new confirmed professional, academic or project evidence: creating a claim, linking one, or reclassifying one into those classes is refused with 409 `gap_marked`. Learning evidence may still coexist. A merge that brings such evidence into a gap-marked survivor clears the marker. | The spec refuses the marker when evidence exists; the same rule in the other direction keeps a skill from showing Gap and Professional together. |
+| 4 | 4.3.2 (Resume exposure) | Implemented as written: stated plus Postgres full-text search for mentions. | Listed here because the brief said "contains"; the spec wins (also under Clarifications). |
+| 5 | 5.4a (events) | A manually added claim writes `CLAIM_CONFIRMED`; skill edits (name, aliases, note) write no event. | The table has no event for a manual claim add and none for skill edits. |
+| 6 | 4.3 (Skill fields) | `skills.llm_run_id` added. | General provenance convention in 4.1 for LLM-derived rows. |
+| 7 | 4.3.2 (headline order) | Professional evidence with engagement type `unspecified` ranks after internship and before academic. | The spec's order omits it; INV-16 says treat it conservatively. |
+| 8 | 4.3 (Skill aliases) | At most 50 aliases per skill (database check). | The spec gives no limit; merges accumulate aliases. |
+
+**ADR-023 and the gap-marked refusal: what the user is told.** The API returns the machine code only, in the project's normal error shape: `409 {"error": {"code": "gap_marked"}}`. The instruction to clear the gap comes from the two UI messages (the Skills and Evidence pages, and the Review page):
+
+- Skills and Evidence pages (`evidenceLabels.ts`): "This skill is marked as a gap. Clear the gap first, or add this as Learning evidence."
+- Review page and batch results (`reviewMessages.ts`): "A skill on this item is marked as a gap. Clear the gap first, or make this Learning evidence."
+
+If the control chat wants the API body to carry the sentence as well, that is a small change to the shared error model for every route, so I left it.
 
 ## Clarifications where the spec overrode the brief
 
-- **Resume exposure:** the brief said "text contains the canonical name or an alias". The spec (4.3.2) says stated claims plus Postgres full-text search for mentions. The spec's version is implemented.
-- **Redirect field:** the brief guessed `merged_into_id`; the spec's field is `merged_into_skill_id`.
-- **Evidence source types:** the spec has `resume`, `project_url`, `user_assertion`, `artifact`; used as specified.
-- **Batch confirm:** the brief described the UI sending several single confirms; the spec lists batch confirm as a Review command, so there is an endpoint, with the same per-item semantics.
-- **Confirm and reject proposed claims:** the brief listed these; see the first deviation above.
-- **"Explicit on upload":** the spec wording is implemented as an upload checkbox (the brief made it optional).
+| Brief | Spec section | What I did |
+| --- | --- | --- |
+| Resume exposure is "resumes whose extracted text contains the canonical name or an alias" | 4.3.2 | Stated (a claim cites the resume) plus mentioned (Postgres full-text search, `simple` configuration, phrase match), computed on read |
+| Redirect field "for example `merged_into_id`" | 4.3 | The spec's field `merged_into_skill_id` |
+| "confirm and reject proposed claims" | 5.4a, 5.4 | See deviation 1: no proposed rows exist, so the commands are not built |
+| Batch confirm as several single confirms from the UI | 9 (Review: batch confirm) | A `batch-confirm` endpoint with the same per-item transaction and version rules |
+| Optional upload checkbox | 14 (Task 9: "explicit on upload") | Implemented as a checkbox that enqueues the same job |
+| Evidence sources "per the spec's types" | 4.3 | `resume`, `project_url`, `user_assertion`, `artifact` |
 
 ## Additions beyond the brief
 
@@ -97,17 +109,19 @@ None that contradict a rule. These are readings of places where the spec is sile
 - Gap-versus-evidence refusal in the other direction, with ADR-023.
 - Evidence list and detail pages, a nav link for each of Skills and Evidence, and `evidence_extraction` on resume responses.
 - A boundary test that extraction cannot import the evidence writers.
+- The fake provider's evidence sample runs only when the fake provider is configured. Proved by `tests/test_llm_providers.py::test_the_evidence_sample_is_only_reachable_through_the_fake_provider`: the sample is wired only in `build_provider` for `LLM_PROVIDER=fake`; a bare `FakeProvider()` returns empty lists; `LLM_PROVIDER=anthropic` builds the Anthropic adapter, not a fake; and no module other than `factory.py` references the sample module.
 
 ## Process deviations
 
-- **I ran `npx prettier --version` while looking for a formatter config, and npx downloaded prettier (3.9.10) into its cache** without asking. Nothing was installed into the project (`package.json` and the lockfile are unchanged) and prettier was not used afterwards; I used `npx --no-install` from then on. The npx cache entry is still on disk; tell me if you want me to remove it.
+- **Rule violation: I ran `npx prettier --version` while looking for a formatter config, and npx downloaded prettier 3.9.10 into its cache without asking**, against the rule to ask before any install or download. Nothing was installed into the project (`package.json` and the lockfile are unchanged) and prettier was never used. Cleanup, approved by the owner: I deleted only that cache entry (`%LOCALAPPDATA%\npm-cache\_npx\b388654678d519d9`); the two other entries there (eslint, create-next-app) pre-date this task and were left alone. Between the slip and the cleanup I used `npx --no-install` for local tools; from now on `npx` is not run in this project at all, including `--version`.
 - I ran `ruff format` on the files I created or edited, as the existing code is `ruff format` clean and CI checks it; no repository-wide formatter run.
-- Docker Compose could not publish ports 5173 and 5432, so I used a temporary override file kept outside the repository. The committed Compose file is unchanged apart from three new variables.
+- Docker Compose could not publish ports 5173 and 5432 while Windows reserved them, so I used a temporary override file kept outside the repository. After the owner restarted winnat, I stopped that stack, deleted the override files, confirmed with `netstat` and `netsh` that both ports were free, and started the normal stack. The committed Compose file is unchanged apart from three new variables.
 
 ## Unresolved issues
 
-- **Port reservation (blocks the UI check).** To sign in with Google at `http://localhost:5173`, Windows must stop reserving 5173. From an administrator terminal: `net stop winnat` then `net start winnat` (or restart Docker Desktop or the machine), then I restart the stack without the override.
-- Check 5 (your UI check) and check 6 (optional real extraction) are not run.
+- Port reservation: resolved. The owner restarted winnat; the stack now runs on the normal ports (`migrate` exit 0, `/healthz` 200, `http://localhost:5173` serves the app and proxies the API).
+- Check 5 (the owner's UI check) is not run yet.
+- Check 6 (real extraction) was declined by the owner for now and is **not run**.
 - GitHub Actions is untested until the push.
 - The fake provider's sample proposes at most five claims per resume and never an engagement type; only scripted tests and a real run exercise those paths.
 - A name made only of punctuation (for example `C++`) can match unrelated resumes in "mentioned" exposure (full-text search is token-based).
